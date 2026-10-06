@@ -1234,3 +1234,157 @@ textarea {
   display: grid;
   gap: 4px;
 }
+
+/* ------------------------- flow trading (Phase 7A) ------------------------- */
+
+.flow-replay-row {
+  margin-top: 10px;
+}
+
+.flow-trade-cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 1240px) {
+  .flow-trade-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.flow-block {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  padding: 11px 12px 12px;
+  min-width: 0;
+}
+
+.flow-block-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  text-transform: uppercase;
+  margin: 0 0 9px;
+}
+
+.flow-pos-side {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-align: center;
+  border: 1px solid var(--line);
+  background: var(--panel-3);
+  color: var(--dim);
+  padding: 8px 0;
+  margin-bottom: 10px;
+}
+
+.flow-pos-side.long {
+  color: var(--up);
+  border-color: color-mix(in srgb, var(--up) 45%, var(--line));
+}
+
+.flow-pos-side.short {
+  color: var(--down);
+  border-color: color-mix(in srgb, var(--down) 45%, var(--line));
+}
+
+.flow-pos-qty {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.flow-qty-row {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.flow-qty-row > label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+
+.flow-trade-btns {
+  margin-bottom: 10px;
+}
+
+.flow-trade-btns .btn {
+  flex: 1;
+}
+
+.flow-pos-kv {
+  font-size: 11.5px;
+}
+
+.flow-decision-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 9px;
+}
+
+.flow-decision-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  text-transform: uppercase;
+  min-width: 76px;
+}
+
+.flow-notice {
+  font-family: var(--mono);
+  font-size: 11px;
+  margin: 11px 0 0;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  background: var(--panel-3);
+}
+
+.flow-notice.ok {
+  color: var(--up);
+  border-color: color-mix(in srgb, var(--up) 35%, var(--line));
+}
+
+.flow-notice.bad {
+  color: var(--down);
+  border-color: color-mix(in srgb, var(--down) 35%, var(--line));
+}
+
+.flow-span {
+  grid-column: 1 / -1;
+}
+
+.flow-trades-scroll {
+  overflow-x: auto;
+}
+
+.flow-trades-scroll .table {
+  min-width: 860px;
+}
+
+.flow-results-card {
+  margin-top: 14px;
+}
+
+.flow-results-kvs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 26px;
+}
+
+@media (max-width: 1240px) {
+  .flow-results-kvs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

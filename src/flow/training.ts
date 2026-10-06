@@ -37,6 +37,10 @@ export interface TrainingSnapshot {
   totalEvents: number;
   atEnd: boolean;
   atStart: boolean;
+  /** Timestamp of the newest revealed event (null before the first event). */
+  timestamp: number | null;
+  /** Sequence of the newest revealed event (0 = none) — the exact clock. */
+  sequence: number;
   orderFlow: OrderFlowSnapshot;
   dom: DOMSnapshot;
   /** Latest book (mirrored from the DOM engine for convenient rendering). */
@@ -51,6 +55,8 @@ export class TrainingEngine {
   private readonly of = new OrderFlowEngine();
   private readonly dom = new DOMEngine();
   private consumed = 0;
+  private lastTimestamp: number | null = null;
+  private lastSequence = 0;
   private priceSeries: Array<{ t: number; price: number }> = [];
 
   constructor(feed: MarketDataFeed, truth: ScenarioTruth | null = null) {
@@ -96,6 +102,8 @@ export class TrainingEngine {
     this.dom.reset();
     this.priceSeries = [];
     this.consumed = 0;
+    this.lastTimestamp = null;
+    this.lastSequence = 0;
     for (let i = 0; i < target; i++) {
       const ev = this.feed.nextEvent();
       if (!ev) break;
@@ -117,6 +125,8 @@ export class TrainingEngine {
         this.priceSeries = this.priceSeries.filter((_, i) => i % 2 === 0);
       }
     }
+    this.lastTimestamp = ev.timestamp;
+    this.lastSequence = ev.sequence;
     this.consumed++;
   }
 
@@ -130,6 +140,8 @@ export class TrainingEngine {
       totalEvents: this.feed.totalEvents(),
       atEnd: this.consumed >= this.feed.totalEvents(),
       atStart: this.consumed === 0,
+      timestamp: this.lastTimestamp,
+      sequence: this.lastSequence,
       orderFlow: of,
       dom,
       book: dom.hasBook ? { bids: dom.bids, asks: dom.asks } : null,

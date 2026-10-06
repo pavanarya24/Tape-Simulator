@@ -64,7 +64,18 @@ import {
   type FlowScenarioId,
   type ScenarioTruth,
 } from "../flow/scenarios";
-import { TrainingEngine } from "../flow/training";
+import { FlowTrainingSession, type FlowNotice } from "../flow/session";
+import {
+  DEFAULT_FLOW_COSTS,
+  DEFAULT_FLOW_DECISION,
+  DEFAULT_FLOW_RISK,
+  type FlowCosts,
+  type FlowDecision,
+  type FlowPosition,
+  type FlowRisk,
+} from "../flow/execution";
+import type { FlowTradeView } from "../flow/journal";
+import type { FlowSessionResults } from "../flow/scoring";
 
 /** Opening ranges are defined against the 09:30 America/New_York cash open. */
 const OR_ANCHOR_TZ = "America/New_York";
@@ -106,7 +117,35 @@ export interface FlowState {
   priceSeries: Array<{ t: number; price: number }>;
   /** Null until the reveal button is pressed — the ONLY exposure mechanism. */
   revealed: ScenarioTruth | null;
+  /** Post-reveal hold: results are on screen until Continue/Restart. */
+  held: boolean;
+  /* --- Phase 7A simulated trading (no truth ever enters these fields) --- */
+  orderQty: number;
+  position: FlowPosition;
+  decision: FlowDecision;
+  costs: FlowCosts;
+  risk: FlowRisk;
+  notice: FlowNotice | null;
+  /** Trade history; hiddenPattern is null in every record until reveal. */
+  trades: FlowTradeView[];
+  /** Post-reveal ONLY — null before reveal (blind-mode guarantee). */
+  results: FlowSessionResults | null;
 }
+
+const FLOW_IDLE_POSITION: FlowPosition = {
+  side: "FLAT",
+  quantity: 0,
+  averageEntryPrice: null,
+  currentPrice: null,
+  realizedPnL: 0,
+  unrealizedPnL: 0,
+  totalPnL: 0,
+  entryTimestamp: null,
+  exitTimestamp: null,
+  maxFavorableExcursion: 0,
+  maxAdverseExcursion: 0,
+  costsAccrued: 0,
+};
 
 const FLOW_IDLE: FlowState = {
   active: false,
@@ -120,6 +159,15 @@ const FLOW_IDLE: FlowState = {
   book: null,
   priceSeries: [],
   revealed: null,
+  held: false,
+  orderQty: 1,
+  position: FLOW_IDLE_POSITION,
+  decision: { ...DEFAULT_FLOW_DECISION },
+  costs: { ...DEFAULT_FLOW_COSTS },
+  risk: { ...DEFAULT_FLOW_RISK },
+  notice: null,
+  trades: [],
+  results: null,
 };
 
 /** Events auto-revealed when a scenario is generated, so the tape has context. */
@@ -183,9 +231,15 @@ export class TapeLabController {
   classifying = false;
   currentClassification: SessionClassification | null = null;
 
-  private flowTraining: TrainingEngine | null = null;
+  private flowSession: FlowTrainingSession | null = null;
   private flowTruth: ScenarioTruth | null = null;
   private flowRevealed = false;
+  private flowHeld = false;
+  /** Simulated cost/risk settings persist across scenario generations. */
+  private flowCosts: FlowCosts = { ...DEFAULT_FLOW_COSTS };
+  private flowRisk: FlowRisk = { ...DEFAULT_FLOW_RISK };
+  /** Monotonic scenario-instance counter — journal ids carry NO seed/pattern. */
+  private flowScenarioSeq = 0;
 
   private actions: ActionEntry[] = [];
   private notesByKey = new Map<string, JournalNotes>();
@@ -797,9 +851,9 @@ export class TapeLabController {
   /* ------------------------- order-flow training ------------------------- */
 
   private flowState(): FlowState {
-    const training = this.flowTraining;
-    if (!training) return FLOW_IDLE;
-    const snap = training.snapshot();
+    const session = this.flowSession;
+    if (!session) return FLOW_IDLE;
+    const snap = session.snapshot();
     return {
       active: true,
       source: snap.source,
@@ -812,6 +866,16 @@ export class TapeLabController {
       book: snap.book,
       priceSeries: snap.priceSeries,
       revealed: this.flowRevealed ? this.flowTruth : null,
+      held: this.flowHeld,
+      orderQty: snap.orderQty,
+      position: snap.position,
+      decision: snap.decision,
+      costs: snap.costs,
+      risk: snap.risk,
+      notice: snap.notice,
+      trades: snap.trades,
+      // Double-gated: scoring only runs after reveal AND inside the session.
+      results: this.flowRevealed ? session.results() : null,
     };
   }
 
@@ -825,37 +889,155 @@ export class TapeLabController {
     const seed = (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
     const id = pattern === "any" ? pickScenarioId(seed ^ 0x51ed270b) : pattern;
     const generated = generateScenario(id, seed);
-    this.flowTraining = new TrainingEngine(generated.feed, generated.truth);
+    this.flowScenarioSeq++;
+    this.flowSession = new FlowTrainingSession(generated.feed, generated.truth, {
+      // Neutral instance id: never derived from the seed, so pre-reveal state
+      // exposes no generator metadata (spec §11).
+      sessionId: `flow-${this.flowScenarioSeq}`,
+      costs: this.flowCosts,
+      risk: this.flowRisk,
+      contract: CONTRACTS.NQ,
+    });
     this.flowTruth = generated.truth;
     this.flowRevealed = false;
-    this.flowTraining.stepForward(FLOW_WARMUP);
+    this.flowHeld = false;
+    this.flowSession.warmup(FLOW_WARMUP);
     this.notify();
   }
 
-  /** Advance the flow session; returns false when nothing was revealed. */
+  /** Advance the flow session; returns false when nothing was revealed
+   *  (or while the post-reveal hold is active). */
   stepFlow(n = 1): boolean {
-    if (!this.flowTraining) return false;
-    const taken = this.flowTraining.stepForward(n);
+    const session = this.flowSession;
+    if (!session) return false;
+    if (this.flowRevealed && this.flowHeld) return false;
+    const taken = session.step(n);
     this.notify();
     return taken > 0;
   }
 
   stepFlowBack(): void {
-    if (!this.flowTraining) return;
-    this.flowTraining.stepBack();
+    const session = this.flowSession;
+    if (!session) return;
+    if (this.flowRevealed && this.flowHeld) return;
+    session.stepBack();
     this.notify();
   }
 
+  /** ⟲ RESET — rewind the tape to event 0 and clear all trading state. */
   resetFlow(): void {
-    if (!this.flowTraining) return;
-    this.flowTraining.reset();
+    const session = this.flowSession;
+    if (!session) return;
+    session.reset();
+    this.flowHeld = false;
     this.notify();
   }
 
-  /** "Reveal what it was" — the only mechanism that exposes the truth to UI. */
+  /** "Reveal what it was" — the only mechanism that exposes the truth to UI.
+   *  Revealing holds the session: step/stepBack/trading pause until
+   *  continueFlowAfterReveal() or restartFlowScenario(). */
   revealFlow(): void {
-    if (!this.flowTraining) return;
+    const session = this.flowSession;
+    if (!session) return;
     this.flowRevealed = true;
+    this.flowHeld = true;
+    session.markRevealed();
+    this.notify();
+  }
+
+  /** CONTINUE AFTER REVEAL — release the hold and keep trading the tape. */
+  continueFlowAfterReveal(): boolean {
+    if (!this.flowRevealed) return false;
+    this.flowHeld = false;
+    this.notify();
+    return true;
+  }
+
+  /** RESTART SCENARIO — same seed/scenario (never regenerated), identical
+   *  events, clean position and journal. Decision and reveal are kept. */
+  restartFlowScenario(): void {
+    const session = this.flowSession;
+    if (!session) return;
+    session.restart(FLOW_WARMUP);
+    this.flowHeld = false;
+    this.notify();
+  }
+
+  /** REPLAY FROM START — rewind the tape to the first event, keeping journal,
+   *  decision and reveal. Refused while a position is open. */
+  replayFlowFromStart(): boolean {
+    const session = this.flowSession;
+    if (!session) return false;
+    const ok = session.replayFromStart();
+    this.notify();
+    return ok;
+  }
+
+  /* ------------------------- flow trading (Phase 7A) ------------------------- */
+
+  /** MARKET BUY with the current order quantity, at the revealed ask. */
+  flowBuy(): void {
+    const session = this.flowSession;
+    if (!session) return;
+    if (this.flowRevealed && this.flowHeld) {
+      session.setNotice(false, "SESSION PAUSED AFTER REVEAL — CONTINUE OR RESTART");
+    } else {
+      session.buy();
+    }
+    this.notify();
+  }
+
+  /** MARKET SELL with the current order quantity, at the revealed bid. */
+  flowSell(): void {
+    const session = this.flowSession;
+    if (!session) return;
+    if (this.flowRevealed && this.flowHeld) {
+      session.setNotice(false, "SESSION PAUSED AFTER REVEAL — CONTINUE OR RESTART");
+    } else {
+      session.sell();
+    }
+    this.notify();
+  }
+
+  /** FLATTEN — close the whole position (LONG at bid, SHORT at ask). */
+  flowFlatten(): void {
+    const session = this.flowSession;
+    if (!session) return;
+    if (this.flowRevealed && this.flowHeld) {
+      session.setNotice(false, "SESSION PAUSED AFTER REVEAL — CONTINUE OR RESTART");
+    } else {
+      session.flatten();
+    }
+    this.notify();
+  }
+
+  setFlowQty(qty: number): void {
+    const session = this.flowSession;
+    if (!session) return;
+    session.setOrderQty(qty);
+    this.notify();
+  }
+
+  setFlowDecision(patch: Partial<FlowDecision>): void {
+    const session = this.flowSession;
+    if (!session) return;
+    session.setDecision(patch);
+    this.notify();
+  }
+
+  setFlowCosts(patch: Partial<FlowCosts>): void {
+    const session = this.flowSession;
+    if (!session) return;
+    session.setCosts(patch);
+    this.flowCosts = { ...this.flowCosts, ...patch };
+    this.notify();
+  }
+
+  setFlowRisk(patch: Partial<FlowRisk>): void {
+    const session = this.flowSession;
+    if (!session) return;
+    session.setRisk(patch);
+    this.flowRisk = { ...this.flowRisk, ...patch };
     this.notify();
   }
 
