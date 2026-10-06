@@ -1,10 +1,13 @@
 import { useEffect, useRef } from "react";
 import type { VolumeAtPrice } from "../flow/orderFlow";
 import type { FlowAnnotation, FlowAnnotationType } from "../flow/recognition";
+import { compact, price as fmtPrice } from "../util/format";
 
 interface FlowChartProps {
   priceSeries: Array<{ t: number; price: number }>;
   cvdSeries: number[];
+  /** Revealed trade count — places a truncated CVD series on the time axis. */
+  tradeCount?: number;
   profile: VolumeAtPrice[];
   showCvd: boolean;
   showProfile: boolean;
@@ -14,15 +17,25 @@ interface FlowChartProps {
   showAnnotations?: boolean;
 }
 
-/* Canvas-drawn chart for the Flow Lab: traded-price path, CVD band and a
-   volume-at-price profile. Colours mirror the terminal's CSS tokens. */
+/* -------------------------------------------------------------------------
+   Canvas chart for the Flow Lab.
+
+   Layout (left → right):  plot area · price axis labels · volume profile
+   gutter.                  (top → bottom): price candles · CVD pane · time
+   axis. Everything is drawn from the revealed synthetic tape — candles are
+   time-bucketed OHLC aggregates of the traded-price series, never fed by a
+   separate OHLC dataset.
+   ------------------------------------------------------------------------- */
 
 const C = {
   bg: "#0a0d10",
+  pane: "#0b0f14",
   grid: "#161b21",
+  axis: "#2a333d",
   line: "#e6a93c",
   vwap: "#4d8ff0",
   cvd: "#a78bfa",
+  cvdFill: "rgba(167,139,250,0.14)",
   up: "#2fbf71",
   down: "#e5484d",
   dim: "#55606b",
@@ -39,16 +52,453 @@ const ANNOTATION_COLORS: Record<FlowAnnotationType, string> = {
   replenishment: "#4dd0e1",
 };
 
-export function FlowChart({
-  priceSeries,
-  cvdSeries,
-  profile,
-  showCvd,
-  showProfile,
-  vwap,
-  annotations = [],
-  showAnnotations = true,
-}: FlowChartProps) {
+const MONO = "'IBM Plex Mono', monospace";
+const AXIS_TZ = "America/New_York";
+const fmtHMS = new Intl.DateTimeFormat("en-US", {
+  hour12: false,
+  timeZone: AXIS_TZ,
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+});
+const fmtHM = new Intl.DateTimeFormat("en-US", {
+  hour12: false,
+  timeZone: AXIS_TZ,
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+/* ---------------------------- candle building ---------------------------- */
+
+export interface FlowCandle {
+  /** Bucket start timestamp. */
+  t: number;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  /** Trades that printed inside the bucket. */
+  n: number;
+}
+
+/** Human-friendly bucket widths (ms), smallest first. */
+const NICE_STEPS_MS = [
+  100, 200, 250, 500, 1_000, 2_000, 5_000, 10_000, 15_000, 30_000, 60_000,
+  120_000, 300_000, 600_000,
+];
+
+/**
+ * Smallest friendly bucket width that yields roughly `targetBuckets` candles
+ * across `spanMs` — so the chart shows a readable number of candles on any
+ * scenario length.
+ */
+export function pickBucketMs(spanMs: number, targetBuckets: number): number {
+  const raw = spanMs / Math.max(1, targetBuckets);
+  for (const step of NICE_STEPS_MS) if (step >= raw) return step;
+  return NICE_STEPS_MS[NICE_STEPS_MS.length - 1];
+}
+
+/**
+ * Aggregate the traded-price series into time-bucketed OHLC candles.
+ * Points are consumed in series order; out-of-order timestamps are folded
+ * into the previous bucket so the result is always time-ordered.
+ */
+export function buildCandles(
+  points: Array<{ t: number; price: number }>,
+  bucketMs: number,
+): FlowCandle[] {
+  if (points.length === 0) return [];
+  const t0 = points[0].t;
+  const step = Math.max(1, bucketMs);
+  const candles: FlowCandle[] = [];
+  let current: FlowCandle | null = null;
+  let currentBucket = -1;
+  for (const p of points) {
+    const b = Math.max(currentBucket, Math.floor((p.t - t0) / step));
+    if (b !== currentBucket || current === null) {
+      current = { t: t0 + b * step, o: p.price, h: p.price, l: p.price, c: p.price, n: 1 };
+      candles.push(current);
+      currentBucket = b;
+    } else {
+      current.h = Math.max(current.h, p.price);
+      current.l = Math.min(current.l, p.price);
+      current.c = p.price;
+      current.n++;
+    }
+  }
+  return candles;
+}
+
+/* -------------------------------- drawing -------------------------------- */
+
+export interface FlowChartDrawInput {
+  priceSeries: Array<{ t: number; price: number }>;
+  cvdSeries: number[];
+  tradeCount?: number;
+  profile: VolumeAtPrice[];
+  showCvd: boolean;
+  showProfile: boolean;
+  vwap: number | null;
+  annotations?: FlowAnnotation[];
+  showAnnotations?: boolean;
+}
+
+/**
+ * Pure draw routine (no DOM access beyond the context) so tests can render
+ * the chart against a stub canvas and assert on what was painted.
+ */
+export function drawFlowChart(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  input: FlowChartDrawInput,
+): void {
+  const { priceSeries, cvdSeries, profile, showCvd, showProfile, vwap } = input;
+  const annotations = input.annotations ?? [];
+  const tradeCount = input.tradeCount ?? 0;
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = C.bg;
+  ctx.fillRect(0, 0, width, height);
+
+  if (priceSeries.length === 0) {
+    ctx.fillStyle = C.dim;
+    ctx.font = `12px ${MONO}`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("Generate a scenario, then step or play to reveal the tape.", 16, height / 2);
+    return;
+  }
+
+  /* ---- layout ---- */
+  const padLeft = 10;
+  const padTop = 8;
+  const padBottom = 22;
+  const axisW = 64; // price-axis label column, right of the plot (terminal-style)
+  const gutterW =
+    showProfile && profile.length > 0 ? Math.min(140, Math.max(84, width * 0.14)) : 0;
+  const plotW = Math.max(60, width - padLeft - axisW - gutterW);
+  const plotX = padLeft;
+  const plotRight = plotX + plotW;
+
+  const cvdWanted = Math.max(56, Math.min(110, Math.round(height * 0.24)));
+  let priceBottom = height - padBottom - cvdWanted - 10;
+  const cvdVisible = showCvd && cvdSeries.length > 1 && priceBottom - padTop >= 110;
+  if (!cvdVisible) priceBottom = height - padBottom;
+  const cvdTop = priceBottom + 10;
+  const cvdBottom = height - padBottom;
+
+  /* ---- candles ---- */
+  const t0 = priceSeries[0].t;
+  const tEnd = priceSeries[priceSeries.length - 1].t;
+  const span = Math.max(1, tEnd - t0);
+  const target = Math.max(30, Math.min(90, Math.floor(plotW / 11)));
+  const bucketMs = pickBucketMs(span, target);
+  const candles = buildCandles(priceSeries, bucketMs);
+  const axisT0 = t0;
+  const axisT1 = candles[candles.length - 1].t + bucketMs;
+  const timeSpan = Math.max(1, axisT1 - axisT0);
+  const xOfTime = (t: number) => {
+    const clamped = Math.min(axisT1, Math.max(axisT0, t));
+    return plotX + (plotW * (clamped - axisT0)) / timeSpan;
+  };
+
+  /* ---- price scale ---- */
+  let hi = -Infinity;
+  let lo = Infinity;
+  for (const c of candles) {
+    if (c.h > hi) hi = c.h;
+    if (c.l < lo) lo = c.l;
+  }
+  if (vwap !== null) {
+    hi = Math.max(hi, vwap);
+    lo = Math.min(lo, vwap);
+  }
+  const pad = Math.max((hi - lo) * 0.08, 0.75);
+  hi += pad;
+  lo -= pad;
+  const gridTop = padTop + 4;
+  const gridBottom = priceBottom - 4;
+  const yOf = (p: number) =>
+    gridBottom - ((p - lo) / Math.max(1e-9, hi - lo)) * (gridBottom - gridTop);
+
+  /* ---- CVD pane background (drawn first so the series sits on it) ---- */
+  if (cvdVisible) {
+    ctx.fillStyle = C.pane;
+    ctx.fillRect(plotX, cvdTop, plotW, cvdBottom - cvdTop);
+  }
+
+  /* ---- gridlines + price-axis (Y) labels ---- */
+  ctx.font = `10px ${MONO}`;
+  ctx.textBaseline = "middle";
+  const rows = 5;
+  for (let g = 0; g <= rows; g++) {
+    const y = gridTop + ((gridBottom - gridTop) * g) / rows;
+    const val = hi - ((hi - lo) * g) / rows;
+    ctx.strokeStyle = C.grid;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(plotX, Math.round(y) + 0.5);
+    ctx.lineTo(plotRight, Math.round(y) + 0.5);
+    ctx.stroke();
+    ctx.fillStyle = C.text;
+    ctx.textAlign = "left";
+    ctx.fillText(fmtPrice(val), plotRight + 7, y);
+  }
+
+  /* ---- VWAP ---- */
+  if (vwap !== null) {
+    const vy = yOf(vwap);
+    ctx.strokeStyle = C.vwap;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(plotX, vy);
+    ctx.lineTo(plotRight, vy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = C.vwap;
+    ctx.textAlign = "left";
+    ctx.fillText("VWAP", plotX + 4, vy - 6);
+  }
+
+  /* ---- candles ---- */
+  const slot = plotW / candles.length;
+  const bodyW = Math.max(1, Math.min(14, slot * 0.62));
+  for (const c of candles) {
+    const cx = xOfTime(c.t + bucketMs / 2);
+    const up = c.c >= c.o;
+    const col = up ? C.up : C.down;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(Math.round(cx) + 0.5, yOf(c.h));
+    ctx.lineTo(Math.round(cx) + 0.5, yOf(c.l));
+    ctx.stroke();
+    const yo = yOf(c.o);
+    const yc = yOf(c.c);
+    ctx.fillStyle = col;
+    ctx.fillRect(cx - bodyW / 2, Math.min(yo, yc), bodyW, Math.max(1, Math.abs(yc - yo)));
+  }
+
+  /* ---- observable event markers (time-interpolated onto the tape) ---- */
+  if (input.showAnnotations !== false && annotations.length > 0 && priceSeries.length > 1) {
+    const drawn = Math.min(annotations.length, 150);
+    for (let k = 0; k < drawn; k++) {
+      const a = annotations[k];
+      if (a.t < axisT0 || a.t > axisT1) continue;
+      let iLo = 0;
+      let iHi = priceSeries.length - 1;
+      while (iHi - iLo > 1) {
+        const mid = (iLo + iHi) >> 1;
+        if (priceSeries[mid].t <= a.t) iLo = mid;
+        else iHi = mid;
+      }
+      const pa = priceSeries[iLo];
+      const pb = priceSeries[iHi];
+      const seg = pb.t - pa.t;
+      const frac = seg > 0 ? Math.min(1, Math.max(0, (a.t - pa.t) / seg)) : 0;
+      const price = pa.price + (pb.price - pa.price) * frac;
+      const x = xOfTime(a.t);
+      const y = yOf(price);
+      ctx.globalAlpha = a.interpretive ? 0.95 : 0.7;
+      ctx.fillStyle = ANNOTATION_COLORS[a.type] ?? C.text;
+      ctx.beginPath();
+      ctx.arc(x, y, a.interpretive ? 4 : 3, 0, Math.PI * 2);
+      ctx.fill();
+      if (a.interpretive) {
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = C.bg;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.font = `9px ${MONO}`;
+        ctx.fillStyle = ANNOTATION_COLORS[a.type] ?? C.text;
+        ctx.textAlign = x > plotRight - 90 ? "right" : "left";
+        ctx.fillText(a.label.toUpperCase(), x + (ctx.textAlign === "right" ? -6 : 6), y - 6);
+        ctx.textAlign = "left";
+        ctx.font = `10px ${MONO}`;
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  /* ---- last price line + tag ---- */
+  const lastCandle = candles[candles.length - 1];
+  const lastY = yOf(lastCandle.c);
+  ctx.strokeStyle = C.line;
+  ctx.globalAlpha = 0.45;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 3]);
+  ctx.beginPath();
+  ctx.moveTo(plotX, lastY);
+  ctx.lineTo(plotRight, lastY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = C.line;
+  const tagW = 58;
+  const tagX = plotRight - tagW - 2;
+  const tagY = Math.min(Math.max(lastY - 7, gridTop), gridBottom - 14);
+  ctx.fillRect(tagX, tagY, tagW, 14);
+  ctx.fillStyle = C.bg;
+  ctx.font = `10px ${MONO}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(fmtPrice(lastCandle.c), tagX + tagW / 2, tagY + 7);
+
+  /* ---- CVD pane ---- */
+  if (cvdVisible) {
+    const cLoRaw = Math.min(0, ...cvdSeries);
+    const cHiRaw = Math.max(0, ...cvdSeries);
+    let cLo = cLoRaw;
+    let cHi = cHiRaw;
+    if (cHi - cLo < 1) {
+      cHi += 1;
+      cLo -= 1;
+    }
+    const cPad = (cHi - cLo) * 0.08;
+    cHi += cPad;
+    cLo -= cPad;
+    const cy = (v: number) =>
+      cvdBottom - 3 - ((v - cLo) / Math.max(1e-9, cHi - cLo)) * (cvdBottom - cvdTop - 6);
+    // A truncated cvdSeries covers the LAST `cvdSeries.length` trades — map
+    // through the true trade count so the curve lines up with the candles.
+    const total = Math.max(tradeCount, cvdSeries.length, 1);
+    const startIdx = Math.max(0, total - cvdSeries.length);
+    const cxOf = (i: number) =>
+      xOfTime(axisT0 + (timeSpan * (startIdx + i)) / Math.max(1, total - 1));
+
+    // zero line
+    ctx.strokeStyle = C.axis;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(plotX, cy(0));
+    ctx.lineTo(plotRight, cy(0));
+    ctx.stroke();
+
+    // filled area between the curve and zero
+    ctx.beginPath();
+    ctx.moveTo(cxOf(0), cy(0));
+    for (let i = 0; i < cvdSeries.length; i++) ctx.lineTo(cxOf(i), cy(cvdSeries[i]));
+    ctx.lineTo(cxOf(cvdSeries.length - 1), cy(0));
+    ctx.closePath();
+    ctx.fillStyle = C.cvdFill;
+    ctx.fill();
+
+    // curve
+    ctx.strokeStyle = C.cvd;
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    for (let i = 0; i < cvdSeries.length; i++) {
+      const x = cxOf(i);
+      const y = cy(cvdSeries[i]);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // labels: name + current value (left), scale hi/lo (right)
+    const lastCvd = cvdSeries[cvdSeries.length - 1];
+    ctx.font = `10px ${MONO}`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = C.cvd;
+    ctx.fillText(`CVD ${lastCvd > 0 ? "+" : ""}${lastCvd}`, plotX + 5, cvdTop + 10);
+    ctx.fillStyle = C.dim;
+    ctx.font = `9px ${MONO}`;
+    ctx.textAlign = "right";
+    ctx.fillText(`${cHi > 0 ? "+" : ""}${Math.round(cHi)}`, plotRight - 4, cvdTop + 9);
+    ctx.fillText(`${cLo > 0 ? "+" : ""}${Math.round(cLo)}`, plotRight - 4, cvdBottom - 8);
+  }
+
+  /* ---- volume profile gutter ---- */
+  if (gutterW > 0) {
+    const gx = plotRight + axisW;
+    const innerX = gx + 6;
+    const innerW = gutterW - 12;
+    ctx.fillStyle = C.pane;
+    ctx.fillRect(gx, padTop, gutterW, priceBottom - padTop);
+
+    const maxTotal = Math.max(...profile.map((p) => p.total)) || 1;
+    // Bar height follows the real spacing between adjacent price levels, so
+    // the profile hugs the price scale instead of overlapping into slabs.
+    let minGap = Infinity;
+    for (let i = 1; i < profile.length; i++) {
+      const g = profile[i].price - profile[i - 1].price;
+      if (g > 0 && g < minGap) minGap = g;
+    }
+    if (!Number.isFinite(minGap)) minGap = 0.25;
+    const pxPerPrice = (priceBottom - padTop - 8) / Math.max(1e-9, hi - lo);
+    const barH = Math.max(2, Math.min(12, pxPerPrice * minGap * 0.8));
+
+    for (const p of profile) {
+      const mid = yOf(p.price);
+      const top = Math.max(padTop, mid - barH / 2);
+      const bottom = Math.min(priceBottom, mid + barH / 2);
+      if (bottom <= top) continue;
+      const w = ((p.total / maxTotal) * innerW);
+      const total = p.total || 1;
+      const sellW = (p.sell / total) * w;
+      ctx.globalAlpha = 0.92;
+      ctx.fillStyle = C.down;
+      ctx.fillRect(innerX, top, sellW, bottom - top);
+      ctx.fillStyle = C.up;
+      ctx.fillRect(innerX + sellW, top, w - sellW, bottom - top);
+      ctx.globalAlpha = 1;
+    }
+
+    // gutter frame + captions
+    ctx.strokeStyle = C.axis;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(Math.round(gx) + 0.5, padTop);
+    ctx.lineTo(Math.round(gx) + 0.5, priceBottom);
+    ctx.stroke();
+    ctx.fillStyle = C.dim;
+    ctx.font = `9px ${MONO}`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("VOL PROFILE", innerX, padTop + 8);
+    ctx.fillStyle = C.text;
+    ctx.fillText(`max ${compact(maxTotal)}`, innerX, priceBottom - 8);
+  }
+
+  /* ---- axes: vertical price axis + horizontal time axis ---- */
+  ctx.strokeStyle = C.axis;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(Math.round(plotRight) + 0.5, padTop);
+  ctx.lineTo(Math.round(plotRight) + 0.5, cvdVisible ? cvdBottom : priceBottom);
+  ctx.stroke();
+  const axisY = Math.round(height - padBottom) + 0.5;
+  ctx.beginPath();
+  ctx.moveTo(plotX, axisY);
+  ctx.lineTo(plotRight, axisY);
+  ctx.stroke();
+
+  /* ---- time (X) axis labels ---- */
+  ctx.fillStyle = C.text;
+  ctx.font = `10px ${MONO}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  const useShort = bucketMs >= 60_000;
+  const labelStep = Math.max(1, Math.ceil(candles.length / 8));
+  for (let k = 0; k < candles.length; k += labelStep) {
+    const x = xOfTime(candles[k].t + bucketMs / 2);
+    const label = (useShort ? fmtHM : fmtHMS).format(new Date(candles[k].t));
+    ctx.strokeStyle = C.axis;
+    ctx.beginPath();
+    ctx.moveTo(Math.round(x) + 0.5, axisY - 4);
+    ctx.lineTo(Math.round(x) + 0.5, axisY);
+    ctx.stroke();
+    ctx.fillStyle = C.text;
+    ctx.fillText(label, x, axisY + 5);
+  }
+}
+
+/* ------------------------------- component ------------------------------- */
+
+export function FlowChart(props: FlowChartProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
@@ -68,171 +518,24 @@ export function FlowChart({
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, width, height);
-      ctx.fillStyle = C.bg;
-      ctx.fillRect(0, 0, width, height);
-
-      const profileWidth = showProfile && profile.length > 0 ? Math.min(130, Math.max(70, width * 0.14)) : 0;
-      const mainW = width - profileWidth - 46;
-      const priceH = showCvd ? height * 0.68 : height - 22;
-      const cvdTop = priceH + 12;
-      const cvdH = height - cvdTop - 18;
-
-      const prices = priceSeries.map((p) => p.price);
-      const allPrices = vwap !== null ? [...prices, vwap] : prices;
-      if (allPrices.length === 0) {
-        ctx.fillStyle = C.dim;
-        ctx.font = "12px IBM Plex Mono, monospace";
-        ctx.fillText("Generate a scenario, then step or play to reveal the tape.", 16, height / 2);
-        return;
-      }
-      let lo = Math.min(...allPrices);
-      let hi = Math.max(...allPrices);
-      const pad = Math.max((hi - lo) * 0.08, 0.75);
-      lo -= pad;
-      hi += pad;
-      const px = (i: number) => (mainW * i) / Math.max(1, priceSeries.length - 1);
-      const py = (p: number) => 10 + (priceH - 20) * (1 - (p - lo) / (hi - lo));
-
-      // gridlines
-      ctx.strokeStyle = C.grid;
-      ctx.lineWidth = 1;
-      ctx.font = "10px IBM Plex Mono, monospace";
-      for (let g = 0; g <= 4; g++) {
-        const y = 10 + ((priceH - 20) * g) / 4;
-        ctx.beginPath();
-        ctx.moveTo(40, y);
-        ctx.lineTo(40 + mainW, y);
-        ctx.stroke();
-        const val = hi - ((hi - lo) * g) / 4;
-        ctx.fillStyle = C.dim;
-        ctx.fillText(val.toFixed(2), 4, y + 3);
-      }
-
-      // VWAP
-      if (vwap !== null) {
-        ctx.strokeStyle = C.vwap;
-        ctx.setLineDash([5, 4]);
-        ctx.beginPath();
-        ctx.moveTo(40, py(vwap));
-        ctx.lineTo(40 + mainW, py(vwap));
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-
-      // price path
-      if (priceSeries.length > 1) {
-        ctx.strokeStyle = C.line;
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        priceSeries.forEach((p, i) => {
-          const x = 40 + px(i);
-          if (i === 0) ctx.moveTo(x, py(p.price));
-          else ctx.lineTo(x, py(p.price));
-        });
-        ctx.stroke();
-        // last price marker
-        const last = priceSeries[priceSeries.length - 1];
-        ctx.fillStyle = C.line;
-        ctx.beginPath();
-        ctx.arc(40 + px(priceSeries.length - 1), py(last.price), 2.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // observable event markers — timestamp/sequence mapped onto the path
-      // (priceSeries is decimated, so index mapping would land in the wrong
-      // place; we interpolate by time between neighbouring points instead).
-      if (showAnnotations && annotations.length > 0 && priceSeries.length > 1) {
-        const t0 = priceSeries[0].t;
-        const tEnd = priceSeries[priceSeries.length - 1].t;
-        const drawn = Math.min(annotations.length, 150);
-        for (let k = 0; k < drawn; k++) {
-          const a = annotations[k];
-          if (a.t < t0 || a.t > tEnd) continue;
-          let lo = 0;
-          let hi = priceSeries.length - 1;
-          while (hi - lo > 1) {
-            const mid = (lo + hi) >> 1;
-            if (priceSeries[mid].t <= a.t) lo = mid;
-            else hi = mid;
-          }
-          const pa = priceSeries[lo];
-          const pb = priceSeries[hi];
-          const span = pb.t - pa.t;
-          const frac = span > 0 ? Math.min(1, Math.max(0, (a.t - pa.t) / span)) : 0;
-          const idxF = lo + frac;
-          const price = pa.price + (pb.price - pa.price) * frac;
-          const x = 40 + (mainW * idxF) / Math.max(1, priceSeries.length - 1);
-          const y = py(price);
-          ctx.globalAlpha = a.interpretive ? 0.95 : 0.7;
-          ctx.fillStyle = ANNOTATION_COLORS[a.type] ?? C.text;
-          ctx.beginPath();
-          ctx.arc(x, y, a.interpretive ? 4 : 3, 0, Math.PI * 2);
-          ctx.fill();
-          if (a.interpretive) {
-            ctx.globalAlpha = 1;
-            ctx.strokeStyle = "#0a0d10";
-            ctx.lineWidth = 1;
-            ctx.stroke();
-            ctx.font = "9px IBM Plex Mono, monospace";
-            ctx.fillStyle = ANNOTATION_COLORS[a.type] ?? C.text;
-            ctx.fillText(a.label.toUpperCase(), x + 6, y - 6);
-          }
-          ctx.globalAlpha = 1;
-        }
-      }
-
-      // CVD band
-      if (showCvd && cvdSeries.length > 1 && cvdH > 24) {
-        let cLo = Math.min(...cvdSeries);
-        let cHi = Math.max(...cvdSeries);
-        if (cHi - cLo < 1) {
-          cHi += 1;
-          cLo -= 1;
-        }
-        ctx.strokeStyle = "#1c232b";
-        ctx.beginPath();
-        ctx.moveTo(40, cvdTop + cvdH / 2);
-        ctx.lineTo(40 + mainW, cvdTop + cvdH / 2);
-        ctx.stroke();
-        ctx.strokeStyle = C.cvd;
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        cvdSeries.forEach((v, i) => {
-          const x = 40 + (mainW * i) / (cvdSeries.length - 1);
-          const y = cvdTop + cvdH * (1 - (v - cLo) / (cHi - cLo));
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        });
-        ctx.stroke();
-        ctx.fillStyle = C.dim;
-        ctx.fillText("CVD", 44, cvdTop + 10);
-      }
-
-      // volume profile
-      if (showProfile && profile.length > 0 && profileWidth > 0) {
-        const maxTotal = Math.max(...profile.map((p) => p.total)) || 1;
-        const barH = Math.max(2, (priceH - 20) / profile.length);
-        for (const p of profile) {
-          const y = py(p.price) - barH / 2;
-          const w = (p.total / maxTotal) * (profileWidth - 8);
-          const total = p.total || 1;
-          const buyW = (p.buy / total) * w;
-          ctx.fillStyle = C.down;
-          ctx.fillRect(40 + mainW + 6, y, w - buyW, barH - 1);
-          ctx.fillStyle = C.up;
-          ctx.fillRect(40 + mainW + 6 + w - buyW, y, buyW, barH - 1);
-        }
-        ctx.fillStyle = C.dim;
-        ctx.fillText("PROFILE", 40 + mainW + 6, 12);
-      }
+      drawFlowChart(ctx, width, height, props);
     };
 
     draw();
     const onResize = () => draw();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [priceSeries, cvdSeries, profile, showCvd, showProfile, vwap, annotations, showAnnotations]);
+  }, [
+    props.priceSeries,
+    props.cvdSeries,
+    props.tradeCount,
+    props.profile,
+    props.showCvd,
+    props.showProfile,
+    props.vwap,
+    props.annotations,
+    props.showAnnotations,
+  ]);
 
   return (
     <div ref={wrapRef} style={{ width: "100%", height: "100%", minHeight: 320 }}>
