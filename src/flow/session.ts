@@ -40,6 +40,7 @@ import {
   type FlowRisk,
 } from "./execution";
 import { tradeView, type FlowTradeRecord, type FlowTradeView } from "./journal";
+import { computeAma } from "./indicators/ama";
 import { scoreFlowSession, type FlowSessionResults } from "./scoring";
 import {
   flowEvidenceLabel,
@@ -96,6 +97,11 @@ export interface FlowSessionSnapshot {
   timeline: FlowTimelineEntry[];
   /** Engine classification — NULL until reveal (blind-mode guarantee). */
   recognition: FlowRecognition | null;
+  /* --- Adaptive Moving Average (objective indicator — safe while blind) --- */
+  /** One AMA value per revealed print, aligned with priceSeries. */
+  amaSeries: Array<{ t: number; value: number }>;
+  /** Current AMA (latest revealed print) — null before any trade. */
+  ama: number | null;
 }
 
 /** Metrics whose state changes tell a timeline story (noisy ones excluded). */
@@ -166,6 +172,12 @@ export class FlowTrainingSession {
   /* --- Phase 7B: recognition runs on the event clock, cached by index --- */
   private recognition: FlowRecognition | null = null;
   private recognitionIndex = -1;
+  /** AMA also rides the event clock: recomputed only when the clock moves. */
+  private amaCache: {
+    eventIndex: number;
+    series: Array<{ t: number; value: number }>;
+    current: number | null;
+  } | null = null;
   /** Deterministic evidence timeline: diffs of observable signatures. */
   private timelineCache: {
     maxIndex: number;
@@ -267,6 +279,28 @@ export class FlowTrainingSession {
       this.recognitionIndex = snap.eventIndex;
     }
     return this.recognition;
+  }
+
+  /**
+   * AMA on the event clock: a pure function of the revealed price series,
+   * cached by event index so state reads never recalculate it and any
+   * navigation path (step, seek, restart, replay) reproduces it exactly.
+   * Objective indicator — exposed while blind, never gated by reveal.
+   */
+  private ensureAma(snap: TrainingSnapshot): {
+    series: Array<{ t: number; value: number }>;
+    current: number | null;
+  } {
+    if (!this.amaCache || this.amaCache.eventIndex !== snap.eventIndex) {
+      const values = computeAma(snap.priceSeries.map((p) => p.price));
+      const series = snap.priceSeries.map((p, i) => ({ t: p.t, value: values[i] }));
+      this.amaCache = {
+        eventIndex: snap.eventIndex,
+        series,
+        current: series.length > 0 ? series[series.length - 1].value : null,
+      };
+    }
+    return this.amaCache;
   }
 
   private static signatureOf(rec: FlowRecognition): Map<string, string> {
@@ -456,6 +490,7 @@ export class FlowTrainingSession {
   snapshot(): FlowSessionSnapshot {
     const snap = this.training.snapshot();
     const recognition = this.ensureRecognition(snap);
+    const ama = this.ensureAma(snap);
     // Objective timeline/annotations: observable events only — safe while
     // blind. The engine's pattern answer stays behind `this.revealed`.
     this.ensureTimeline();
@@ -497,6 +532,8 @@ export class FlowTrainingSession {
       annotations,
       timeline: this.revealed ? visible : [],
       recognition: this.revealed ? recognition : null,
+      amaSeries: ama.series,
+      ama: ama.current,
     };
   }
 }

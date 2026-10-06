@@ -126,6 +126,11 @@ export interface FlowState {
   dom: DOMSnapshot | null;
   book: { bids: Level[]; asks: Level[] } | null;
   priceSeries: Array<{ t: number; price: number }>;
+  /* --- Adaptive Moving Average (objective — safe while blind) --- */
+  /** One AMA value per revealed print, aligned with priceSeries. */
+  amaSeries: Array<{ t: number; value: number }>;
+  /** Current AMA (latest revealed print) — null before any trade. */
+  ama: number | null;
   /** Null until the reveal button is pressed — the ONLY exposure mechanism. */
   revealed: ScenarioTruth | null;
   /** Post-reveal hold: results are on screen until Continue/Restart. */
@@ -182,6 +187,8 @@ const FLOW_IDLE: FlowState = {
   dom: null,
   book: null,
   priceSeries: [],
+  amaSeries: [],
+  ama: null,
   revealed: null,
   held: false,
   orderQty: 1,
@@ -900,6 +907,8 @@ export class TapeLabController {
       dom: snap.dom,
       book: snap.book,
       priceSeries: snap.priceSeries,
+      amaSeries: snap.amaSeries,
+      ama: snap.ama,
       revealed: this.flowRevealed ? this.flowTruth : null,
       held: this.flowHeld,
       orderQty: snap.orderQty,

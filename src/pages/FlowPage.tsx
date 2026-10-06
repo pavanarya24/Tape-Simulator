@@ -60,6 +60,7 @@ export function FlowPage({ state }: { state: AppState }) {
   const [showProfile, setShowProfile] = useState(true);
   const [showDom, setShowDom] = useState(true);
   const [showMarkers, setShowMarkers] = useState(true);
+  const [showAma, setShowAma] = useState(true);
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
@@ -402,6 +403,16 @@ export function FlowPage({ state }: { state: AppState }) {
             >
               Show events
             </button>
+            <button
+              className={`chip ${showAma ? "on" : ""}`}
+              onClick={() => setShowAma((v) => !v)}
+              title="Adaptive Moving Average — efficiency-ratio smoothed trend line"
+            >
+              Show AMA
+            </button>
+            <span className="badge mono" title="Current Adaptive Moving Average value">
+              AMA {flow.ama !== null ? fmtPrice(flow.ama) : "—"}
+            </span>
           </div>
         </div>
         <div style={{ height: 440 }}>
@@ -413,6 +424,7 @@ export function FlowPage({ state }: { state: AppState }) {
             showCvd={showCvd}
             showProfile={showProfile}
             vwap={of && of.vwap > 0 ? of.vwap : null}
+            ama={showAma ? flow.amaSeries : null}
             annotations={flow.annotations}
             showAnnotations={showMarkers}
           />
@@ -421,6 +433,7 @@ export function FlowPage({ state }: { state: AppState }) {
           Candles are time-bucketed OHLC aggregates of the revealed synthetic tape — the generator
           never consumes OHLC data. Axes: price (right of the plot) · time (bottom, New York tape
           clock). The CVD pane shares the time axis; the profile gutter scales to the price axis.
+          The cyan AMA line adapts with the tape — tight in purposeful moves, slow in the chop.
         </p>
       </div>
 

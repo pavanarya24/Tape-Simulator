@@ -12,6 +12,8 @@ interface FlowChartProps {
   showCvd: boolean;
   showProfile: boolean;
   vwap: number | null;
+  /** Adaptive Moving Average overlay — one value per revealed print. */
+  ama?: Array<{ t: number; value: number }> | null;
   /** Observable event markers — mapped by timestamp, never array index. */
   annotations?: FlowAnnotation[];
   showAnnotations?: boolean;
@@ -34,6 +36,7 @@ const C = {
   axis: "#2a333d",
   line: "#e6a93c",
   vwap: "#4d8ff0",
+  ama: "#22d3ee",
   cvd: "#a78bfa",
   cvdFill: "rgba(167,139,250,0.14)",
   up: "#2fbf71",
@@ -139,6 +142,8 @@ export interface FlowChartDrawInput {
   showCvd: boolean;
   showProfile: boolean;
   vwap: number | null;
+  /** Adaptive Moving Average overlay — one value per revealed print. */
+  ama?: Array<{ t: number; value: number }> | null;
   annotations?: FlowAnnotation[];
   showAnnotations?: boolean;
 }
@@ -155,6 +160,7 @@ export function drawFlowChart(
 ): void {
   const { priceSeries, cvdSeries, profile, showCvd, showProfile, vwap } = input;
   const annotations = input.annotations ?? [];
+  const ama = input.ama ?? null;
   const tradeCount = input.tradeCount ?? 0;
 
   ctx.clearRect(0, 0, width, height);
@@ -279,6 +285,35 @@ export function drawFlowChart(
     const yc = yOf(c.c);
     ctx.fillStyle = col;
     ctx.fillRect(cx - bodyW / 2, Math.min(yo, yc), bodyW, Math.max(1, Math.abs(yc - yo)));
+  }
+
+  /* ---- Adaptive Moving Average ---- */
+  if (ama && ama.length > 1) {
+    let started = false;
+    ctx.strokeStyle = C.ama;
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    let first: { t: number; value: number } | null = null;
+    for (const pt of ama) {
+      if (pt.t < axisT0 || pt.t > axisT1) continue;
+      const x = xOfTime(pt.t);
+      const y = yOf(pt.value);
+      if (!started) {
+        ctx.moveTo(x, y);
+        started = true;
+        first = pt;
+      } else {
+        ctx.lineTo(x, y);
+      }
+    }
+    ctx.stroke();
+    if (first) {
+      ctx.fillStyle = C.ama;
+      ctx.font = `10px ${MONO}`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText("AMA", plotX + 4, yOf(first.value) - 6);
+    }
   }
 
   /* ---- observable event markers (time-interpolated onto the tape) ---- */
@@ -533,6 +568,7 @@ export function FlowChart(props: FlowChartProps) {
     props.showCvd,
     props.showProfile,
     props.vwap,
+    props.ama,
     props.annotations,
     props.showAnnotations,
   ]);
