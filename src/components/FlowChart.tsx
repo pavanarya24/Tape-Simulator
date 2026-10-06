@@ -3,6 +3,20 @@ import type { VolumeAtPrice } from "../flow/orderFlow";
 import type { FlowAnnotation, FlowAnnotationType } from "../flow/recognition";
 import { compact, price as fmtPrice } from "../util/format";
 
+/** A completed trade drawn on the chart in REVIEW mode (spec §8D.2). */
+export interface FlowChartTrade {
+  tradeId: number;
+  side: "LONG" | "SHORT";
+  quantity: number;
+  entryTimestamp: number;
+  exitTimestamp: number;
+  entryPrice: number;
+  exitPrice: number;
+  netPnL: number;
+  mfe: number;
+  mae: number;
+}
+
 interface FlowChartProps {
   priceSeries: Array<{ t: number; price: number }>;
   cvdSeries: number[];
@@ -17,6 +31,11 @@ interface FlowChartProps {
   /** Observable event markers — mapped by timestamp, never array index. */
   annotations?: FlowAnnotation[];
   showAnnotations?: boolean;
+  /** Review-only entry/exit markers — null while blind (policy gate). */
+  trades?: FlowChartTrade[] | null;
+  showTradeMarkers?: boolean;
+  /** BAR_CONTEXT: coarser candle aggregation, still no future events. */
+  coarseContext?: boolean;
 }
 
 /* -------------------------------------------------------------------------
@@ -146,6 +165,11 @@ export interface FlowChartDrawInput {
   ama?: Array<{ t: number; value: number }> | null;
   annotations?: FlowAnnotation[];
   showAnnotations?: boolean;
+  /** Review-only entry/exit markers — null while blind (policy gate). */
+  trades?: FlowChartTrade[] | null;
+  showTradeMarkers?: boolean;
+  /** BAR_CONTEXT: coarser candle aggregation, still no future events. */
+  coarseContext?: boolean;
 }
 
 /**
@@ -199,7 +223,9 @@ export function drawFlowChart(
   const tEnd = priceSeries[priceSeries.length - 1].t;
   const span = Math.max(1, tEnd - t0);
   const target = Math.max(30, Math.min(90, Math.floor(plotW / 11)));
-  const bucketMs = pickBucketMs(span, target);
+  // BAR_CONTEXT shows the surrounding price context at a coarser grain — it
+  // changes aggregation only, never which events are revealed.
+  const bucketMs = pickBucketMs(span, input.coarseContext ? Math.max(8, Math.round(target / 3)) : target);
   const candles = buildCandles(priceSeries, bucketMs);
   const axisT0 = t0;
   const axisT1 = candles[candles.length - 1].t + bucketMs;
@@ -354,6 +380,63 @@ export function drawFlowChart(
         ctx.font = `10px ${MONO}`;
       }
       ctx.globalAlpha = 1;
+    }
+  }
+
+  /* ---- review trade markers (REVIEW mode only — policy-gated upstream) ---- */
+  const trades = input.trades ?? null;
+  if (input.showTradeMarkers !== false && trades && trades.length > 0 && priceSeries.length > 1) {
+    const drawn = Math.min(trades.length, 40);
+    ctx.font = `9px ${MONO}`;
+    for (let k = 0; k < drawn; k++) {
+      const tr = trades[k];
+      const ex = xOfTime(tr.entryTimestamp);
+      const ey = yOf(tr.entryPrice);
+      const xx = xOfTime(tr.exitTimestamp);
+      const xy = yOf(tr.exitPrice);
+      const long = tr.side === "LONG";
+      const pnlCol = tr.netPnL >= 0 ? C.up : C.down;
+      // entry → exit connector
+      ctx.strokeStyle = C.dim;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(xx, xy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // entry marker: triangle pointing with the position
+      ctx.fillStyle = long ? C.up : C.down;
+      ctx.beginPath();
+      if (long) {
+        ctx.moveTo(ex, ey - 8);
+        ctx.lineTo(ex - 5, ey + 3);
+        ctx.lineTo(ex + 5, ey + 3);
+      } else {
+        ctx.moveTo(ex, ey + 8);
+        ctx.lineTo(ex - 5, ey - 3);
+        ctx.lineTo(ex + 5, ey - 3);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = long ? C.up : C.down;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${tr.side} ${tr.quantity}`, ex + 7, ey);
+      // exit marker: ring coloured by the realised result
+      ctx.strokeStyle = pnlCol;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(xx, xy, 4, 0, Math.PI * 2);
+      ctx.stroke();
+      const rightAlign = xx > plotRight - 96;
+      ctx.textAlign = rightAlign ? "right" : "left";
+      const dx = rightAlign ? -7 : 7;
+      ctx.fillStyle = pnlCol;
+      ctx.fillText(`${tr.netPnL >= 0 ? "+" : "-"}$${Math.abs(tr.netPnL).toFixed(2)}`, xx + dx, xy + 12);
+      ctx.fillStyle = C.dim;
+      ctx.fillText(`MFE ${Math.round(tr.mfe)} / MAE ${Math.round(tr.mae)}`, xx + dx, xy + 23);
+      ctx.textAlign = "left";
     }
   }
 
@@ -571,6 +654,9 @@ export function FlowChart(props: FlowChartProps) {
     props.ama,
     props.annotations,
     props.showAnnotations,
+    props.trades,
+    props.showTradeMarkers,
+    props.coarseContext,
   ]);
 
   return (
