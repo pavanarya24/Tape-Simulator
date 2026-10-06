@@ -26,7 +26,8 @@
 import type { ContractSpec } from "../market/types";
 import { CONTRACTS } from "../market/instruments";
 import type { MarketDataFeed } from "./feed";
-import type { ScenarioTruth } from "./scenarios";
+import type { FlowDifficulty, ScenarioTruth } from "./scenarios";
+import { TIME_STEP_MS, type FlowStepUnit } from "./replay";
 import { TrainingEngine, type TrainingSnapshot } from "./training";
 import {
   DEFAULT_FLOW_COSTS,
@@ -59,6 +60,8 @@ export interface FlowSessionOptions {
   costs?: FlowCosts;
   risk?: FlowRisk;
   contract?: ContractSpec;
+  /** Difficulty the scenario was generated at (Phase 8C breakdown metric). */
+  difficulty?: FlowDifficulty;
 }
 
 export interface FlowNotice {
@@ -165,6 +168,7 @@ export class FlowTrainingSession {
   private readonly truth: ScenarioTruth | null;
   private readonly exec: FlowExecutionEngine;
   private readonly sessionId: string;
+  private readonly difficulty: FlowDifficulty;
   private decision: FlowDecision = { ...DEFAULT_FLOW_DECISION };
   private orderQty = 1;
   private revealed = false;
@@ -191,6 +195,7 @@ export class FlowTrainingSession {
     this.training = new TrainingEngine(feed, truth);
     this.truth = truth;
     this.sessionId = opts.sessionId ?? "flow-session";
+    this.difficulty = opts.difficulty ?? "INTERMEDIATE";
     this.exec = new FlowExecutionEngine({
       contract: opts.contract ?? CONTRACTS.NQ,
       costs: opts.costs ?? DEFAULT_FLOW_COSTS,
@@ -224,6 +229,47 @@ export class FlowTrainingSession {
   stepBack(): void {
     this.training.stepBack();
     this.sync();
+  }
+
+  /**
+   * Advance one step of the chosen unit (spec §8A.1), always in WHOLE events on
+   * the single event clock — the same clock that drives tape, DOM, CVD, profile,
+   * AMA, VWAP, evidence, recognition and execution:
+   *
+   *   EVENT  exactly `amount` events
+   *   TRADE  until `amount` more prints have been crossed
+   *   TIME   until the tape clock has advanced by `amount × TIME_STEP_MS`
+   *
+   * Every intermediate event is applied and synced, so the resulting state is
+   * byte-identical to stepping manually. Never reads past the clock.
+   */
+  stepByUnit(unit: FlowStepUnit, amount = 1): number {
+    if (unit === "EVENT") return this.step(amount);
+    let taken = 0;
+    if (unit === "TRADE") {
+      let crossed = 0;
+      while (crossed < amount) {
+        const before = this.training.snapshot().orderFlow.tradeCount;
+        const n = this.step(1);
+        if (n === 0) break;
+        taken += n;
+        if (this.training.snapshot().orderFlow.tradeCount > before) crossed++;
+      }
+      return taken;
+    }
+    // TIME
+    const targetMs = amount * TIME_STEP_MS;
+    let base: number | null = this.training.snapshot().timestamp;
+    for (;;) {
+      const n = this.step(1);
+      if (n === 0) break;
+      taken += n;
+      const ts = this.training.snapshot().timestamp;
+      if (ts === null) continue;
+      if (base === null) base = ts;
+      if (ts - base >= targetMs) break;
+    }
+    return taken;
   }
 
   seekTo(index: number): void {
@@ -482,6 +528,7 @@ export class FlowTrainingSession {
       dom: snap.dom,
       // Engine recognition rides the same reveal gate as the truth itself.
       recognition: this.ensureRecognition(snap),
+      difficulty: this.difficulty,
     });
   }
 

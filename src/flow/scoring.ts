@@ -22,7 +22,7 @@ import type { FlowBias, FlowDecision, FlowPrediction, FlowRisk } from "./executi
 import type { FlowTradeRecord } from "./journal";
 import type { OrderFlowSnapshot } from "./orderFlow";
 import type { FlowRecognition } from "./recognition";
-import type { FlowScenarioId, PatternDirection, ScenarioTruth } from "./scenarios";
+import type { FlowDifficulty, FlowScenarioId, PatternDirection, ScenarioTruth } from "./scenarios";
 import { scenarioName } from "./scenarios";
 
 export type FlowPatternResult = "CORRECT" | "INCORRECT" | "NO PREDICTION";
@@ -72,6 +72,10 @@ export interface FlowSessionResults {
   rMultiple: number | null;
   entryTiming: FlowEntryTiming;
   mfeCapturePct: number | null;
+  /** Scenario difficulty the session was generated at (Phase 8C breakdown). */
+  difficulty: FlowDifficulty;
+  /** Mean hold time across this session's trades (ms) — null with no trades. */
+  avgHoldMs: number | null;
   /* --- Phase 7B: engine recognition vs truth vs trader (spec §12) --- */
   recognitionPattern: FlowScenarioId | "unknown";
   recognitionConfidence: number | null;
@@ -145,6 +149,8 @@ export interface FlowScoreInput {
   dom: FlowNarrativeDom;
   /** Engine's observable-only recognition — never derived from truth. */
   recognition?: FlowRecognition | null;
+  /** Difficulty the scenario was generated at (defaults to INTERMEDIATE). */
+  difficulty?: FlowDifficulty;
 }
 
 /**
@@ -251,6 +257,7 @@ function majorityDirection(records: readonly FlowTradeRecord[]): "LONG" | "SHORT
 
 export function scoreFlowSession(input: FlowScoreInput): FlowSessionResults {
   const { truth, records, decision, risk, contract, orderFlow, dom, recognition } = input;
+  const difficulty: FlowDifficulty = input.difficulty ?? "INTERMEDIATE";
 
   const trades = records.length;
   const wins = records.filter((r) => r.netPnL > 0).length;
@@ -310,6 +317,10 @@ export function scoreFlowSession(input: FlowScoreInput): FlowSessionResults {
     mfeCapturePct = mfeOfCapturable > 0 ? round1((netOfCapturable / mfeOfCapturable) * 100) : null;
   }
 
+  /* ---- average hold time across the session's completed trades ---- */
+  const avgHoldMs =
+    trades > 0 ? Math.round(records.reduce((s, r) => s + r.durationMs, 0) / trades) : null;
+
   const confidence = decision.level;
   const confidenceVsResult = `${confidence}/5 confidence → ${patternResult}`;
 
@@ -353,6 +364,8 @@ export function scoreFlowSession(input: FlowScoreInput): FlowSessionResults {
     rMultiple,
     entryTiming,
     mfeCapturePct,
+    difficulty,
+    avgHoldMs,
     confidenceVsResult,
     recognitionPattern,
     recognitionConfidence,

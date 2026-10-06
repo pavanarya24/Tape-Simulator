@@ -87,6 +87,20 @@ import {
   type FlowSessionResults,
   type FlowTrainingStats,
 } from "../flow/scoring";
+/* --- Phase 8: professional replay & training experience --- */
+import {
+  DEFAULT_FLOW_SPEED,
+  replayPolicy,
+  replayProgressPct,
+  resolveReplayMode,
+  type FlowReplayMode,
+  type FlowReplaySpeed,
+  type FlowStepUnit,
+  type ReplayPolicy,
+} from "../flow/replay";
+import { computeFlowAnalytics, type FlowAnalytics } from "../flow/analytics";
+import { buildFlowReview, type FlowReview } from "../flow/review";
+import { diffBook, type BookChange, type BookView } from "../flow/domDiff";
 
 /** Opening ranges are defined against the 09:30 America/New_York cash open. */
 const OR_ANCHOR_TZ = "America/New_York";
@@ -121,7 +135,10 @@ export interface FlowState {
   isRealData: boolean;
   eventIndex: number;
   totalEvents: number;
+  atStart: boolean;
   atEnd: boolean;
+  /** Timestamp of the newest revealed event (null before the first event). */
+  timestamp: number | null;
   orderFlow: OrderFlowSnapshot | null;
   dom: DOMSnapshot | null;
   book: { bids: Level[]; asks: Level[] } | null;
@@ -159,6 +176,23 @@ export interface FlowState {
   recognition: FlowRecognition | null;
   /** Raw cross-scenario training metrics — null until the first reveal. */
   trainingStats: FlowTrainingStats | null;
+  /* --- Phase 8A: replay presentation state (policy, never market state) --- */
+  /** Requested replay mode — REVIEW degrades to BLIND before reveal. */
+  replayMode: FlowReplayMode;
+  /** Effective mode after the reveal gate (what the UI is actually in). */
+  effectiveReplayMode: FlowReplayMode;
+  speed: FlowReplaySpeed;
+  stepUnit: FlowStepUnit;
+  /** Session progress 0..100 at the current event (timeline percentage). */
+  progressPct: number;
+  /** What the current mode is allowed to show (overlays, seeking, markers). */
+  policy: ReplayPolicy;
+  /* --- Phase 8B: DOM level-change highlighting for the current event --- */
+  bookChanges: BookChange[];
+  /* --- Phase 8C: derived analytics — reveal-gated like the raw stats --- */
+  analytics: FlowAnalytics | null;
+  /* --- Phase 8D: session review bundle — reveal-gated --- */
+  review: FlowReview | null;
 }
 
 const FLOW_IDLE_POSITION: FlowPosition = {
@@ -182,7 +216,9 @@ const FLOW_IDLE: FlowState = {
   isRealData: false,
   eventIndex: 0,
   totalEvents: 0,
+  atStart: true,
   atEnd: true,
+  timestamp: null,
   orderFlow: null,
   dom: null,
   book: null,
@@ -205,6 +241,15 @@ const FLOW_IDLE: FlowState = {
   timeline: [],
   recognition: null,
   trainingStats: null,
+  replayMode: "LIVE",
+  effectiveReplayMode: "LIVE",
+  speed: DEFAULT_FLOW_SPEED,
+  stepUnit: "EVENT",
+  progressPct: 0,
+  policy: replayPolicy("LIVE", false),
+  bookChanges: [],
+  analytics: null,
+  review: null,
 };
 
 /** Events auto-revealed when a scenario is generated, so the tape has context. */
@@ -282,6 +327,16 @@ export class TapeLabController {
   /** Every revealed scenario's results — the raw material for training stats. */
   private flowHistory: FlowSessionResults[] = [];
   private flowStats: FlowTrainingStats | null = null;
+  private flowAnalytics: FlowAnalytics | null = null;
+  /* --- Phase 8A: replay presentation (policy only — the event clock lives
+         in FlowTrainingSession and stays the single source of truth) --- */
+  private flowReplayMode: FlowReplayMode = "LIVE";
+  private flowSpeed: FlowReplaySpeed = DEFAULT_FLOW_SPEED;
+  private flowStepUnit: FlowStepUnit = "EVENT";
+  /* --- Phase 8B: DOM level-change tracking between rendered events --- */
+  private flowPrevBook: BookView | null = null;
+  private flowPrevIndex = -1;
+  private flowBookChanges: BookChange[] = [];
 
   private actions: ActionEntry[] = [];
   private notesByKey = new Map<string, JournalNotes>();
@@ -896,13 +951,29 @@ export class TapeLabController {
     const session = this.flowSession;
     if (!session) return FLOW_IDLE;
     const snap = session.snapshot();
+    const effectiveReplayMode = resolveReplayMode(this.flowReplayMode, this.flowRevealed);
+    const policy = replayPolicy(effectiveReplayMode, this.flowRevealed);
+    // DOM level changes for the current event: diff against the previously
+    // rendered book when the clock moved one event; a jump (seek/reset/
+    // restart) reports the whole visible book as new. Presentation only —
+    // the deterministic book the engine builds is never touched.
+    const book = snap.book;
+    if (snap.eventIndex === this.flowPrevIndex + 1 || snap.eventIndex === this.flowPrevIndex - 1) {
+      this.flowBookChanges = diffBook(this.flowPrevBook, book);
+    } else {
+      this.flowBookChanges = diffBook(null, book);
+    }
+    this.flowPrevBook = book;
+    this.flowPrevIndex = snap.eventIndex;
     return {
       active: true,
       source: snap.source,
       isRealData: snap.isRealData,
       eventIndex: snap.eventIndex,
       totalEvents: snap.totalEvents,
+      atStart: snap.atStart,
       atEnd: snap.atEnd,
+      timestamp: snap.timestamp,
       orderFlow: snap.orderFlow,
       dom: snap.dom,
       book: snap.book,
@@ -928,6 +999,17 @@ export class TapeLabController {
       // Training stats reference past reveals (incl. confidence) — while
       // blind on a fresh scenario they stay out of trader-facing state.
       trainingStats: this.flowRevealed ? this.flowStats : null,
+      replayMode: this.flowReplayMode,
+      effectiveReplayMode,
+      speed: this.flowSpeed,
+      stepUnit: this.flowStepUnit,
+      progressPct: replayProgressPct(snap.eventIndex, snap.totalEvents),
+      policy,
+      bookChanges: this.flowBookChanges,
+      // Derived analytics + the review bundle ride the same reveal gate as
+      // the raw statistics.
+      analytics: this.flowRevealed ? this.flowAnalytics : null,
+      review: this.flowRevealed ? buildFlowReview(snap.trades, snap.timeline) : null,
     };
   }
 
@@ -949,10 +1031,14 @@ export class TapeLabController {
       costs: this.flowCosts,
       risk: this.flowRisk,
       contract: CONTRACTS.NQ,
+      difficulty: this.flowDifficulty,
     });
     this.flowTruth = generated.truth;
     this.flowRevealed = false;
     this.flowHeld = false;
+    // A fresh scenario starts blind: a post-reveal REVIEW selection never
+    // carries over to a scenario the trader has not seen yet.
+    if (this.flowReplayMode === "REVIEW") this.flowReplayMode = "LIVE";
     this.flowSession.warmup(FLOW_WARMUP);
     this.notify();
   }
@@ -973,6 +1059,78 @@ export class TapeLabController {
     if (!session) return;
     if (this.flowRevealed && this.flowHeld) return;
     session.stepBack();
+    this.notify();
+  }
+
+  /**
+   * REVIEW (post-reveal) is the only state that permits reading ahead. The
+   * post-reveal hold still pauses stepping/trading until CONTINUE — review
+   * navigation goes through seekFlow, which rebuilds deterministically.
+   */
+  private reviewNavigationAllowed(): boolean {
+    return replayPolicy(resolveReplayMode(this.flowReplayMode, this.flowRevealed), this.flowRevealed)
+      .reviewNavigation;
+  }
+
+  /** STEP ▶/◀ in the selected unit (EVENT / TRADE / TIME) — one step of it. */
+  stepFlowUnit(): boolean {
+    const session = this.flowSession;
+    if (!session) return false;
+    if (this.flowRevealed && this.flowHeld) return false;
+    const taken = session.stepByUnit(this.flowStepUnit, 1);
+    this.notify();
+    return taken > 0;
+  }
+
+  /**
+   * Deterministic seek on the event clock (spec §8A.2): the session rebuilds
+   * events 0..index from scratch, so the resulting state is byte-equivalent
+   * to reset → replay. Forward peeking is allowed only in REVIEW mode; a jump
+   * is refused while a position is open so an entry can never be replayed
+   * against a rewound clock.
+   */
+  seekFlow(index: number): boolean {
+    const session = this.flowSession;
+    if (!session) return false;
+    const clamped = Math.max(0, Math.min(Math.round(index), session.totalEvents));
+    // No reading ahead while blind.
+    if (!this.reviewNavigationAllowed() && clamped > session.eventIndex) return false;
+    // Moving BACK past an open position's entry is refused so an entry can
+    // never be replayed against a rewound clock (forward seeks stay legal).
+    if (clamped < session.eventIndex && session.snapshot().position.side !== "FLAT") {
+      session.setNotice(false, "FLATTEN THE OPEN POSITION BEFORE REWINDING");
+      this.notify();
+      return false;
+    }
+    session.seekTo(clamped);
+    this.notify();
+    return true;
+  }
+
+  /** Seek to a percentage of the scenario (timeline scrubbing). */
+  seekFlowProgress(pct: number): boolean {
+    const session = this.flowSession;
+    if (!session) return false;
+    const ratio = Math.max(0, Math.min(1, pct / 100));
+    return this.seekFlow(Math.round(session.totalEvents * ratio));
+  }
+
+  setFlowReplayMode(mode: FlowReplayMode): void {
+    if (mode === "REVIEW" && !this.flowRevealed) {
+      const session = this.flowSession;
+      session?.setNotice(false, "REVIEW MODE UNLOCKS AFTER REVEAL");
+    }
+    this.flowReplayMode = mode;
+    this.notify();
+  }
+
+  setFlowSpeed(speed: FlowReplaySpeed): void {
+    this.flowSpeed = speed;
+    this.notify();
+  }
+
+  setFlowStepUnit(unit: FlowStepUnit): void {
+    this.flowStepUnit = unit;
     this.notify();
   }
 
@@ -1002,7 +1160,11 @@ export class TapeLabController {
       if (results) {
         this.flowHistory = [...this.flowHistory, results];
         this.flowStats = computeFlowTrainingStats(this.flowHistory);
+        this.flowAnalytics = computeFlowAnalytics(this.flowHistory);
       }
+      // Reveal unlocks REVIEW: unrestricted navigation of the completed
+      // scenario is exactly what the review experience needs.
+      this.flowReplayMode = "REVIEW";
     }
     this.notify();
   }
