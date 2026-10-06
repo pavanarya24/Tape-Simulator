@@ -1,5 +1,11 @@
 # Tape Reading Academy — Project Handoff
 
+> **Repository note (Tape Lab).** The course file described below is still here, unchanged,
+> but it now lives at `public/academy.html` and is served as `/academy.html`. The repository
+> root is a Vite + React + TypeScript app called **Tape Lab** — an OHLC futures replay and
+> trading simulator (`src/`, see `README.md`). Everything below still applies to the course
+> file itself; the "single self-contained index.html" description refers to that file only.
+
 Last updated: this conversation, build size 4,134 lines / ~253 KB single HTML file.
 
 ## What this is

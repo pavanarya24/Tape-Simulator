@@ -19,3 +19,4 @@ desktop.ini
 dist/
 build/
 node_modules/
+*.tsbuildinfo
