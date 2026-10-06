@@ -41,6 +41,16 @@ import {
 } from "./execution";
 import { tradeView, type FlowTradeRecord, type FlowTradeView } from "./journal";
 import { scoreFlowSession, type FlowSessionResults } from "./scoring";
+import {
+  flowEvidenceLabel,
+  recognizeFlow,
+  RECOGNITION_MIN_POINTS,
+  type FlowAnnotation,
+  type FlowAnnotationType,
+  type FlowEvidence,
+  type FlowRecognition,
+  type FlowTimelineEntry,
+} from "./recognition";
 
 export interface FlowSessionOptions {
   /** Neutral session instance id (seed hex) — never encodes the pattern. */
@@ -77,7 +87,67 @@ export interface FlowSessionSnapshot {
   notice: FlowNotice | null;
   /** Trader-facing trade history; hiddenPattern is null until reveal. */
   trades: FlowTradeView[];
+  /* --- Phase 7B recognition (observable-only; engine answer gated) --- */
+  /** Objective current-state observations — safe to show while blind. */
+  evidence: FlowEvidence[];
+  /** Objective chart markers (timestamp/sequence mapped) — safe pre-reveal. */
+  annotations: FlowAnnotation[];
+  /** Observable evidence timeline — EMPTY until reveal (spec §8). */
+  timeline: FlowTimelineEntry[];
+  /** Engine classification — NULL until reveal (blind-mode guarantee). */
+  recognition: FlowRecognition | null;
 }
+
+/** Metrics whose state changes tell a timeline story (noisy ones excluded). */
+const TIMELINE_METRICS = new Set([
+  "sellAggression",
+  "buyAggression",
+  "priceResponse",
+  "liquidityReplenishment",
+  "cvd",
+  "sweepEvents",
+  "volumeConcentration",
+  "cvdDivergence",
+  "lowReclaim",
+  "highRejection",
+]);
+
+/** One-shot / high-impact observations get flagged in the timeline. */
+const IMPORTANT_METRICS = new Set([
+  "cvdDivergence",
+  "lowReclaim",
+  "highRejection",
+  "sweepEvents",
+  "liquidityReplenishment",
+]);
+
+/** Which chart marker a metric change draws (null = no marker). */
+function annotationTypeFor(metric: string, interpretation: string): FlowAnnotationType | null {
+  switch (metric) {
+    case "sellAggression":
+    case "buyAggression":
+      return interpretation === "HIGH" ? "aggression" : null;
+    case "volumeConcentration":
+      return interpretation === "HIGH" ? "concentration" : null;
+    case "sweepEvents":
+      return "sweep";
+    case "cvdDivergence":
+      return "divergence";
+    case "lowReclaim":
+    case "highRejection":
+      return "rejection";
+    case "liquidityReplenishment":
+      return interpretation === "HIGH" ? "replenishment" : null;
+    case "priceResponse":
+      return interpretation === "WEAK" ? "concentration" : null;
+    default:
+      return null;
+  }
+}
+
+/** Minimum events between two timeline entries for the SAME metric — kills
+ *  threshold flicker while staying fully deterministic (index arithmetic). */
+const TIMELINE_COOLDOWN = 30;
 
 function signed(n: number): string {
   const sign = n > 0 ? "+" : n < 0 ? "-" : "";
@@ -93,6 +163,17 @@ export class FlowTrainingSession {
   private orderQty = 1;
   private revealed = false;
   private notice: FlowNotice | null = null;
+  /* --- Phase 7B: recognition runs on the event clock, cached by index --- */
+  private recognition: FlowRecognition | null = null;
+  private recognitionIndex = -1;
+  /** Deterministic evidence timeline: diffs of observable signatures. */
+  private timelineCache: {
+    maxIndex: number;
+    signature: Map<string, string>;
+    entries: FlowTimelineEntry[];
+    /** Last event index an entry was recorded for each metric (cooldown). */
+    lastAt: Map<string, number>;
+  } | null = null;
 
   constructor(feed: MarketDataFeed, truth: ScenarioTruth | null = null, opts: FlowSessionOptions = {}) {
     this.training = new TrainingEngine(feed, truth);
@@ -175,9 +256,103 @@ export class FlowTrainingSession {
     return true;
   }
 
+  /**
+   * Recognition on the event clock: computed exactly when the clock moves and
+   * cached by event index, so getState()/snapshot() never recalculate it and
+   * seek/replay reproduce byte-identical results (spec §15).
+   */
+  private ensureRecognition(snap: TrainingSnapshot): FlowRecognition {
+    if (!this.recognition || this.recognitionIndex !== snap.eventIndex) {
+      this.recognition = recognizeFlow(snap);
+      this.recognitionIndex = snap.eventIndex;
+    }
+    return this.recognition;
+  }
+
+  private static signatureOf(rec: FlowRecognition): Map<string, string> {
+    const sig = new Map<string, string>();
+    for (const ev of rec.evidence) sig.set(ev.metric, `${ev.interpretation}|${String(ev.value)}`);
+    return sig;
+  }
+
+  /**
+   * Extend the evidence timeline up to the current event index by walking the
+   * event clock from the last covered point. Deterministic: the signature at
+   * index i depends only on events 0..i, so any navigation path (step, seek,
+   * restart, replay) yields the same entries for the same index. Only ever
+   * called on the event clock — never inside the controller's hot path more
+   * than once per index transition.
+   */
+  private ensureTimeline(): void {
+    const target = this.training.eventIndex;
+    if (this.timelineCache && this.timelineCache.maxIndex >= target) return;
+
+    let index: number;
+    let signature: Map<string, string>;
+    let entries: FlowTimelineEntry[];
+    let lastAt: Map<string, number>;
+    if (this.timelineCache) {
+      index = this.timelineCache.maxIndex;
+      signature = this.timelineCache.signature;
+      entries = this.timelineCache.entries;
+      lastAt = this.timelineCache.lastAt;
+      this.training.seekTo(index);
+    } else {
+      index = 0;
+      signature = new Map<string, string>();
+      entries = [];
+      lastAt = new Map<string, number>();
+      this.training.seekTo(0);
+      // Seed the signature at event 0 so the first diff is well-defined.
+      signature = FlowTrainingSession.signatureOf(recognizeFlow(this.training.snapshot()));
+    }
+
+    while (index < target) {
+      this.training.stepForward(1);
+      index++;
+      const snap = this.training.snapshot();
+      const rec = recognizeFlow(snap);
+      const next = FlowTrainingSession.signatureOf(rec);
+      // No timeline before the recogniser has enough data — early-session
+      // readings are noise, not a story (deterministic: priceSeries length).
+      const eligible = snap.priceSeries.length >= RECOGNITION_MIN_POINTS;
+      for (const ev of rec.evidence) {
+        if (!TIMELINE_METRICS.has(ev.metric)) continue;
+        const key = `${ev.interpretation}|${String(ev.value)}`;
+        if (signature.get(ev.metric) === key) continue;
+        const first = !signature.has(ev.metric);
+        signature.set(ev.metric, key);
+        if (!eligible) continue;
+        // A metric's first appearance with nothing to report is not an event.
+        if (first && ev.interpretation === "NONE") continue;
+        const prev = lastAt.get(ev.metric);
+        if (prev !== undefined && index - prev < TIMELINE_COOLDOWN) continue;
+        lastAt.set(ev.metric, index);
+        entries.push({
+          index,
+          sequence: ev.sequence,
+          timestamp: ev.timestamp,
+          metric: ev.metric,
+          label: flowEvidenceLabel(ev.metric),
+          interpretation: ev.interpretation,
+          important: IMPORTANT_METRICS.has(ev.metric) || ev.interpretation === "DETECTED",
+        });
+      }
+      // Metrics that vanished (e.g. divergence resolved) update silently so a
+      // later reappearance registers as a fresh event.
+      for (const metric of signature.keys()) {
+        if (!next.has(metric)) signature.set(metric, "—");
+      }
+    }
+
+    this.timelineCache = { maxIndex: index, signature, entries, lastAt };
+    // Walk finished at `target`, which is where the clock already was.
+  }
+
   /** Push the current revealed snapshot into the execution engine. */
   private sync(): void {
     const snap = this.training.snapshot();
+    this.ensureRecognition(snap);
     const auto = this.exec.onMarket({
       bid: snap.dom.bestBid,
       ask: snap.dom.bestAsk,
@@ -271,6 +446,8 @@ export class FlowTrainingSession {
       contract: this.exec.contract,
       orderFlow: snap.orderFlow,
       dom: snap.dom,
+      // Engine recognition rides the same reveal gate as the truth itself.
+      recognition: this.ensureRecognition(snap),
     });
   }
 
@@ -278,6 +455,24 @@ export class FlowTrainingSession {
 
   snapshot(): FlowSessionSnapshot {
     const snap = this.training.snapshot();
+    const recognition = this.ensureRecognition(snap);
+    // Objective timeline/annotations: observable events only — safe while
+    // blind. The engine's pattern answer stays behind `this.revealed`.
+    this.ensureTimeline();
+    const current = this.training.eventIndex;
+    const visible = (this.timelineCache?.entries ?? []).filter((e) => e.index <= current);
+    const annotations: FlowAnnotation[] = [];
+    for (const e of visible) {
+      const type = annotationTypeFor(e.metric, e.interpretation);
+      if (!type) continue;
+      annotations.push({
+        t: e.timestamp,
+        seq: e.sequence,
+        type,
+        label: `${e.label} ${e.interpretation}`,
+        interpretive: false,
+      });
+    }
     return {
       source: snap.source,
       isRealData: snap.isRealData,
@@ -298,6 +493,10 @@ export class FlowTrainingSession {
       risk: this.exec.riskConfig,
       notice: this.notice,
       trades: this.records().map((r) => tradeView(r, this.revealed)),
+      evidence: recognition.evidence,
+      annotations,
+      timeline: this.revealed ? visible : [],
+      recognition: this.revealed ? recognition : null,
     };
   }
 }
