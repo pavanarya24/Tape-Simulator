@@ -213,10 +213,10 @@ export function RightColumn({ state }: { state: AppState }) {
         </div>
         <div className="panel-body">
           <p className="dim" style={{ fontSize: 11, margin: 0 }}>
-            Time &amp; Sales, DOM depth, bid/ask volume, delta, cumulative delta, large prints,
-            absorption and liquidity-change panels are architecturally reserved but intentionally
-            empty: the loaded datasets are OHLCV 5-minute bars, which contain none of that
-            information. Connect a real tick / Level-2 source to enable them.
+            This terminal shows OHLCV 5-minute bars, which contain no Time &amp; Sales, depth or
+            aggressor data — those panels stay empty here on purpose. Train order flow on
+            deterministic synthetic events in the <strong>Flow Lab</strong>, or connect a real
+            tick / Level-2 source to enable them on recorded sessions.
           </p>
         </div>
       </section>

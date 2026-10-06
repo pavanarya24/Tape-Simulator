@@ -96,13 +96,11 @@ textarea {
   background: linear-gradient(180deg, #0e1216, #0a0d10);
   min-height: 52px;
 }
+/* A hairline sits above every group. It is nearly invisible against the top
+   edge of the bar, but separates the rows cleanly once the bar wraps at
+   narrower desktop widths — which is where the controls used to collide. */
 .topbar > * {
-  border-top: 1px solid transparent;
-}
-@media (max-width: 1180px) {
-  .topbar > * {
-    border-top: 1px solid var(--line);
-  }
+  border-top: 1px solid var(--line-soft);
 }
 .topbar::-webkit-scrollbar {
   display: none;
@@ -176,10 +174,17 @@ a.navbtn {
 .tb-group {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 14px;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 6px 14px;
   border-right: 1px solid var(--line);
   flex: none;
+}
+.tb-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.2;
 }
 .tb-group.grow {
   flex: 1 1 auto;
@@ -514,6 +519,54 @@ textarea {
   border: 1px solid var(--line);
   background: none;
   cursor: pointer;
+}
+
+/* --- custom EMA controls ------------------------------------------- */
+.ema-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 3px 4px 3px 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+.ema-pill input[type="color"] {
+  width: 20px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--line);
+  background: none;
+  cursor: pointer;
+}
+.ema-remove {
+  border: 0;
+  background: none;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+}
+.ema-remove:hover {
+  color: #e5484d;
+}
+.ema-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ema-add input[type="number"] {
+  width: 78px;
+  padding: 4px 7px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.ema-hint {
+  font-size: 10.5px;
+  color: var(--accent);
 }
 .ind-toggle {
   background: var(--panel);
@@ -1041,4 +1094,143 @@ textarea {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ------------------------------ flow lab ------------------------------ */
+
+.flow-honesty {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.flow-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.flow-controls .field {
+  min-width: 190px;
+}
+
+.flow-progress {
+  height: 4px;
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+.flow-progress > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 120ms linear;
+}
+
+.flow-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+@media (max-width: 1240px) {
+  .flow-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.flow-tape {
+  max-height: 330px;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.flow-largest {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.flow-mid {
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--accent);
+  border: 1px solid var(--line);
+  background: var(--panel-3);
+  padding: 3px 0;
+  margin: 2px 0;
+}
+
+.flow-dom {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.flow-dom-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  font-size: 10.5px;
+  padding: 1px 6px;
+  line-height: 1.5;
+}
+
+.flow-dom-bar {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  right: 0;
+  opacity: 0.16;
+}
+
+.flow-dom-ask .flow-dom-bar {
+  background: var(--down);
+}
+.flow-dom-bid .flow-dom-bar {
+  background: var(--up);
+}
+
+.flow-dom-price {
+  color: var(--dim);
+}
+.flow-dom-ask .flow-dom-price {
+  color: var(--down);
+}
+.flow-dom-bid .flow-dom-price {
+  color: var(--up);
+}
+
+.flow-dom-size {
+  min-width: 44px;
+  text-align: right;
+}
+
+.flow-dom-ord {
+  min-width: 30px;
+  text-align: right;
+}
+
+.flow-truth-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-bottom: 8px;
+}
+
+.flow-truth-list {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--dim);
+  font-size: 11.5px;
+  display: grid;
+  gap: 4px;
 }

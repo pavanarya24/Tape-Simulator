@@ -99,25 +99,63 @@ export function openingRange(
   };
 }
 
+/** EMA periods that are always available, so the legacy fields stay valid. */
+export const DEFAULT_EMA_LENGTHS: readonly number[] = [21, 50, 200];
+
+/** A custom EMA must fit between these lengths (inclusive). */
+export const MIN_EMA_LENGTH = 2;
+export const MAX_EMA_LENGTH = 1000;
+
+/** Most EMAs drawn at once — keeps the chart readable and the panels compact. */
+export const MAX_EMA_COUNT = 6;
+
+/**
+ * Sanitize a user-supplied EMA length list: round, drop anything outside
+ * `MIN_EMA_LENGTH..MAX_EMA_LENGTH`, de-duplicate and sort ascending. Invalid
+ * or junk input yields an empty array (the caller decides on a fallback).
+ */
+export function normalizeEmaLengths(lengths: readonly number[]): number[] {
+  const out = new Set<number>();
+  for (const raw of lengths) {
+    const n = Math.round(Number(raw));
+    if (!Number.isFinite(n) || n < MIN_EMA_LENGTH || n > MAX_EMA_LENGTH) continue;
+    out.add(n);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
 export interface IndicatorSeries {
   vwap: Float64Array;
+  /** Every requested EMA keyed by period — this is what the chart draws. */
+  emas: Record<number, Float64Array>;
   ema21: Float64Array;
   ema50: Float64Array;
   ema200: Float64Array;
   openingRange: OpeningRange;
 }
 
-/** Compute every overlay once per session (cheap: one pass each). */
+/**
+ * Compute every overlay once per session (cheap: one pass each).
+ *
+ * `emaLengths` are the user's custom periods; the three legacy periods are
+ * always computed too so `ema21/50/200` never regress.
+ */
 export function computeIndicators(
   bars: BarSeries,
   openingRangeMinutes: number,
   timeZone: string,
+  emaLengths: readonly number[] = DEFAULT_EMA_LENGTHS,
 ): IndicatorSeries {
+  const emas: Record<number, Float64Array> = {};
+  for (const len of normalizeEmaLengths([...emaLengths, ...DEFAULT_EMA_LENGTHS])) {
+    emas[len] = ema(bars.c, len);
+  }
   return {
     vwap: vwap(bars),
-    ema21: ema(bars.c, 21),
-    ema50: ema(bars.c, 50),
-    ema200: ema(bars.c, 200),
+    emas,
+    ema21: emas[21],
+    ema50: emas[50],
+    ema200: emas[200],
     openingRange: openingRange(bars, openingRangeMinutes, timeZone),
   };
 }

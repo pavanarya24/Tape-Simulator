@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const EMA_DEFAULTS: Record<number, string> = { 21: "#e6a93c", 50: "#a78bfa", 200: "#c8d2dc" };
-const DEFAULT_VWAP_COLOR = "#4d8ff0";
 import type { AppState } from "../state/app";
 import { controller } from "../state/useApp";
 import { clockTime } from "../data/timezone";
 import { price as fmtPrice, compact } from "../util/format";
+import { DEFAULT_EMA_COLORS, EMA_PALETTE } from "../state/settings";
+import { MAX_EMA_COUNT, MAX_EMA_LENGTH, MIN_EMA_LENGTH } from "../indicators/indicators";
 
 const COL = {
   bg: "#06070a",
@@ -43,12 +43,17 @@ export function Chart({ state }: { state: AppState }) {
   const hoverRef = useRef<Hover | null>(null);
   const [, bumpDraw] = useState(0);
   const [overlaysOpen, setOverlaysOpen] = useState(false);
-  const [emaLengths, setEmaLengths] = useState<number[]>([21]);
-  const [emaColors, setEmaColors] = useState<Record<number, string>>({ ...EMA_DEFAULTS });
-  const [vwapColor, setVwapColor] = useState(DEFAULT_VWAP_COLOR);
+  const [emaDraft, setEmaDraft] = useState("");
+  const [emaError, setEmaError] = useState<string | null>(null);
 
   const bars = controller.session?.bars ?? null;
   const { engine, indicators, settings, position } = state;
+  // Overlay configuration lives in persisted settings, not component state, so
+  // custom EMA lengths and colours survive a reload.
+  const emaLengths = settings.indicators.emaLengths;
+  const emaColors = settings.indicators.emaColors;
+  const emaColor = (len: number, i: number) =>
+    emaColors[String(len)] ?? DEFAULT_EMA_COLORS[String(len)] ?? EMA_PALETTE[i % EMA_PALETTE.length];
 
   const fills = state.fills;
 
@@ -236,10 +241,16 @@ export function Chart({ state }: { state: AppState }) {
         ctx.stroke();
       };
 
-      if (indicators && settings.indicators.vwap) line(indicators.vwap, vwapColor, 1.4);
-      if (indicators && settings.indicators.ema21) line(indicators.ema21, emaColors[21] ?? COL.ema21);
-      if (indicators && settings.indicators.ema50) line(indicators.ema50, emaColors[50] ?? COL.ema50);
-      if (indicators && settings.indicators.ema200) line(indicators.ema200, emaColors[200] ?? COL.ema200);
+      if (indicators && settings.indicators.vwap) {
+        line(indicators.vwap, settings.indicators.vwapColor, 1.4);
+      }
+      // Any user-defined length is drawn as long as the series exists.
+      if (indicators) {
+        settings.indicators.emaLengths.forEach((len, i) => {
+          const series = indicators.emas[len];
+          if (series) line(series, emaColor(len, i));
+        });
+      }
 
       // ---- position lines ---------------------------------------------
       const hline = (p: number, color: string, label: string) => {
@@ -344,16 +355,44 @@ export function Chart({ state }: { state: AppState }) {
     };
   }, [bars, engine, indicators, settings, position, viewCount, fills]);
 
+  /** Add or remove one EMA length; the controller persists and recomputes. */
   const toggleEma = (len: number) => {
-    setEmaLengths((prev) => (prev.includes(len) ? prev.filter((l) => l !== len) : [...prev, len].sort((a, b) => a - b)));
-    controller.updateSettings({
-      indicators: {
-        ...settings.indicators,
-        ema21: emaLengths.includes(21) !== (len === 21) ? !settings.indicators.ema21 : settings.indicators.ema21,
-        ema50: emaLengths.includes(50) !== (len === 50) ? !settings.indicators.ema50 : settings.indicators.ema50,
-        ema200: emaLengths.includes(200) !== (len === 200) ? !settings.indicators.ema200 : settings.indicators.ema200,
-      },
-    });
+    setEmaError(null);
+    if (emaLengths.includes(len)) {
+      controller.setEmaLengths(emaLengths.filter((l) => l !== len));
+      return;
+    }
+    if (emaLengths.length >= MAX_EMA_COUNT) {
+      setEmaError(`Up to ${MAX_EMA_COUNT} EMAs at once`);
+      return;
+    }
+    controller.setEmaLengths([...emaLengths, len]);
+  };
+
+  /** Commit the custom length typed into the number field. */
+  const addEmaFromDraft = () => {
+    const raw = emaDraft.trim();
+    const value = Number(raw);
+    if (raw === "" || !Number.isFinite(value)) {
+      setEmaError("Enter a whole number of bars");
+      return;
+    }
+    const length = Math.round(value);
+    if (length < MIN_EMA_LENGTH || length > MAX_EMA_LENGTH) {
+      setEmaError(`Length must be ${MIN_EMA_LENGTH}\u2013${MAX_EMA_LENGTH} bars`);
+      return;
+    }
+    if (emaLengths.includes(length)) {
+      setEmaError(`EMA ${length} is already shown`);
+      return;
+    }
+    if (emaLengths.length >= MAX_EMA_COUNT) {
+      setEmaError(`Up to ${MAX_EMA_COUNT} EMAs at once`);
+      return;
+    }
+    setEmaError(null);
+    setEmaDraft("");
+    controller.setEmaLengths([...emaLengths, length]);
   };
 
   const legend = useMemo(() => {
@@ -421,7 +460,7 @@ export function Chart({ state }: { state: AppState }) {
         <button
           className="btn sm"
           onClick={() => setOverlaysOpen((o) => !o)}
-          title="EMA lengths, colors and defaults"
+          title="Custom EMA lengths, colours and defaults"
         >
           ⚙ EMA settings
         </button>
@@ -432,31 +471,81 @@ export function Chart({ state }: { state: AppState }) {
       {overlaysOpen && (
         <div className="overlay-panel">
           <div className="overlay-row">
-            <span className="tb-label">EMA lengths</span>
+            <span className="tb-label">My EMAs</span>
             <div className="chips">
-              {[21, 50, 200].map((len) => (
+              {emaLengths.length === 0 && (
+                <span className="dim mono" style={{ fontSize: 10.5 }}>
+                  none yet — add your own below
+                </span>
+              )}
+              {emaLengths.map((len, i) => (
+                <span key={len} className="ema-pill">
+                  <input
+                    type="color"
+                    value={emaColor(len, i)}
+                    title={`Colour for EMA ${len}`}
+                    onChange={(e) => controller.setEmaColor(len, e.target.value)}
+                  />
+                  <span className="mono" style={{ color: emaColor(len, i) }}>
+                    EMA {len}
+                  </span>
+                  <button
+                    className="ema-remove"
+                    title={`Remove EMA ${len}`}
+                    aria-label={`Remove EMA ${len}`}
+                    onClick={() => toggleEma(len)}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="overlay-row">
+            <span className="tb-label">Custom EMA</span>
+            <div className="ema-add">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={MIN_EMA_LENGTH}
+                max={MAX_EMA_LENGTH}
+                step={1}
+                value={emaDraft}
+                placeholder={`e.g. 9`}
+                aria-label="Custom EMA length in bars"
+                onChange={(e) => {
+                  setEmaDraft(e.target.value);
+                  setEmaError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addEmaFromDraft();
+                  }
+                }}
+              />
+              <button
+                className="btn sm"
+                onClick={addEmaFromDraft}
+                disabled={emaLengths.length >= MAX_EMA_COUNT}
+                title={`Draw an EMA of any length (${MIN_EMA_LENGTH}\u2013${MAX_EMA_LENGTH} bars)`}
+              >
+                + Add EMA
+              </button>
+            </div>
+            {emaError && <span className="ema-hint mono">{emaError}</span>}
+          </div>
+          <div className="overlay-row">
+            <span className="tb-label">Quick add</span>
+            <div className="chips">
+              {[9, 21, 50, 100, 200].map((len) => (
                 <button
                   key={len}
                   className={`chip ${emaLengths.includes(len) ? "on" : ""}`}
                   onClick={() => toggleEma(len)}
                 >
-                  EMA {len}
+                  {emaLengths.includes(len) ? "✓ " : "+ "}EMA {len}
                 </button>
-              ))}
-            </div>
-          </div>
-          <div className="overlay-row">
-            <span className="tb-label">Colors</span>
-            <div className="chips">
-              {emaLengths.map((len) => (
-                <label key={len} className="overlay-color">
-                  <input
-                    type="color"
-                    value={emaColors[len] ?? EMA_DEFAULTS[len]}
-                    onChange={(e) => setEmaColors({ ...emaColors, [len]: e.target.value })}
-                  />
-                  <span className="mono">EMA {len}</span>
-                </label>
               ))}
             </div>
           </div>
@@ -472,37 +561,34 @@ export function Chart({ state }: { state: AppState }) {
               <label className="overlay-color">
                 <input
                   type="color"
-                  value={vwapColor}
-                  onChange={(e) => setVwapColor(e.target.value)}
+                  value={settings.indicators.vwapColor}
+                  onChange={(e) => controller.setVwapColor(e.target.value)}
                 />
                 <span className="mono">VWAP</span>
               </label>
             </div>
           </div>
           <div className="overlay-row">
-            <span className="tb-label">Defaults</span>
+            <span className="tb-label">Presets</span>
             <div className="chips">
-              <button className="chip" onClick={() => setEmaLengths([21])}>
+              <button className="chip" onClick={() => controller.setEmaLengths([21])}>
                 EMA 21 only
               </button>
-              <button className="chip" onClick={() => setEmaLengths([21, 50])}>
+              <button className="chip" onClick={() => controller.setEmaLengths([21, 50])}>
                 21 + 50
               </button>
-              <button
-                className="chip"
-                onClick={() => {
-                  setEmaLengths([21]);
-                  setEmaColors({ ...EMA_DEFAULTS });
-                  setVwapColor(DEFAULT_VWAP_COLOR);
-                  controller.updateSettings({ indicators: { ...settings.indicators, ema50: false, ema200: false } });
-                }}
-              >
+              <button className="chip" onClick={() => controller.setEmaLengths([9, 21, 50, 200])}>
+                9 · 21 · 50 · 200
+              </button>
+              <button className="chip" onClick={() => controller.resetOverlayDefaults()}>
                 Reset all
               </button>
             </div>
           </div>
           <p className="dim" style={{ fontSize: 10.5, margin: 0 }}>
-            VWAP is session-anchored from the first bar; opening range is anchored at 09:30 New York.
+            Draw any EMA length from {MIN_EMA_LENGTH} to {MAX_EMA_LENGTH} bars (up to {MAX_EMA_COUNT} at
+            once). Lengths and colours persist between visits. VWAP is session-anchored from the first bar;
+            the opening range is anchored at 09:30 New York.
           </p>
         </div>
       )}

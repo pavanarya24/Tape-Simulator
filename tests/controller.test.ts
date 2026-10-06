@@ -10,7 +10,8 @@
 
 import { beforeAll, describe, expect, test } from "bun:test";
 import type { AppState, TapeLabController } from "../src/state/app";
-import { loadSettings, saveSettings, DEFAULT_SETTINGS } from "../src/state/settings";
+import { loadSettings, saveSettings, DEFAULT_SETTINGS, EMA_PALETTE } from "../src/state/settings";
+import { MAX_EMA_COUNT } from "../src/indicators/indicators";
 import { tradesToCsv } from "../src/journal/journal";
 
 let controller: TapeLabController;
@@ -505,5 +506,109 @@ describe("journal export", () => {
 
     // notes survive on the trade object itself
     expect(controller.sim!.closedTrades[0].notes.thesis).toBe('he said "hold", then left');
+  });
+});
+
+describe("custom EMA lengths", () => {
+  test("a custom length is rounded, de-duplicated, persisted and drawn", async () => {
+    controller.setEmaLengths([9, 21, 8.6]); // 8.6 rounds onto 9
+    await settle();
+    const s = state();
+    expect(s.settings.indicators.emaLengths).toEqual([9, 21]);
+    expect(loadSettings().indicators.emaLengths).toEqual([9, 21]);
+
+    // The series is computed for the session, ready for the canvas to draw.
+    const indicators = s.indicators!;
+    expect(indicators.emas[9]).toBeDefined();
+    expect(indicators.emas[9].length).toBe(controller.session!.bars.length);
+    expect(Number.isFinite(indicators.emas[9][indicators.emas[9].length - 1])).toBe(true);
+    // …and a shorter period is genuinely a different line.
+    expect(indicators.emas[9][indicators.emas[9].length - 1]).not.toBe(
+      indicators.emas[21][indicators.emas[21].length - 1],
+    );
+  });
+
+  test("a new length is assigned a readable colour from the palette", async () => {
+    controller.setEmaLengths([21]);
+    await settle();
+    controller.setEmaLengths([21, 77]);
+    await settle();
+    const colors = state().settings.indicators.emaColors;
+    expect(EMA_PALETTE).toContain(colors["77"]);
+  });
+
+  test("removing a length stops computing and persisting it", async () => {
+    controller.setEmaLengths([9, 21]);
+    await settle();
+    controller.setEmaLengths([21]);
+    await settle();
+    expect(loadSettings().indicators.emaLengths).toEqual([21]);
+    expect(Object.keys(state().indicators!.emas).map(Number)).not.toContain(9);
+  });
+
+  test("the list is capped and junk input is discarded", async () => {
+    controller.setEmaLengths([3, 5, 7, 9, 11, 13, 15, 17]);
+    await settle();
+    expect(state().settings.indicators.emaLengths.length).toBe(MAX_EMA_COUNT);
+
+    controller.setEmaLengths([NaN, 0, -4, 1, 5000]);
+    await settle();
+    expect(state().settings.indicators.emaLengths).toEqual([]);
+    // Removing every EMA must not break the session's stock series.
+    expect(state().indicators!.emas[21].length).toBe(controller.session!.bars.length);
+  });
+
+  test("colours and the VWAP colour persist", async () => {
+    controller.setEmaLengths([21]);
+    controller.setEmaColor(21, "#123456");
+    controller.setVwapColor("#abcdef");
+    await settle();
+    const stored = loadSettings().indicators;
+    expect(stored.emaColors["21"]).toBe("#123456");
+    expect(stored.vwapColor).toBe("#abcdef");
+    expect(state().indicators!.emas[21]).toBeDefined();
+  });
+
+  test("reset restores EMA 21 only with the stock colours", async () => {
+    controller.resetOverlayDefaults();
+    await settle();
+    const stored = loadSettings().indicators;
+    expect(stored.emaLengths).toEqual([21]);
+    expect(stored.emaColors["21"]).toBe("#e6a93c");
+    expect(stored.vwapColor).toBe("#4d8ff0");
+    expect(stored.vwap).toBe(true);
+  });
+
+  test("legacy ema21/50/200 booleans migrate into an explicit list", async () => {
+    (globalThis as { localStorage: Storage }).localStorage.setItem(
+      "tapelab_settings_v1",
+      JSON.stringify({ indicators: { vwap: true, ema21: true, ema50: true, ema200: false, openingRange: true } }),
+    );
+    const migrated = loadSettings();
+    expect(migrated.indicators.emaLengths).toEqual([21, 50]);
+    expect(Object.prototype.hasOwnProperty.call(migrated.indicators, "ema21")).toBe(false);
+
+    // A stored length list wins over the legacy booleans…
+    (globalThis as { localStorage: Storage }).localStorage.setItem(
+      "tapelab_settings_v1",
+      JSON.stringify({ indicators: { ema21: true, emaLengths: [8, 8, 34] } }),
+    );
+    expect(loadSettings().indicators.emaLengths).toEqual([8, 34]);
+
+    // …and junk in storage is discarded rather than trusted.
+    (globalThis as { localStorage: Storage }).localStorage.setItem(
+      "tapelab_settings_v1",
+      JSON.stringify({ indicators: { emaLengths: "nope", emaColors: { 21: "red", 50: "#a78bfa" }, vwapColor: 12 } }),
+    );
+    const junk = loadSettings().indicators;
+    expect(junk.emaLengths).toEqual([21]);
+    expect(junk.emaColors["21"]).toBe(DEFAULT_SETTINGS.indicators.emaColors["21"]);
+    expect(junk.emaColors["50"]).toBe("#a78bfa");
+    expect(junk.vwapColor).toBe(DEFAULT_SETTINGS.indicators.vwapColor);
+
+    saveSettings(DEFAULT_SETTINGS);
+    controller.setEmaLengths([21]);
+    await settle();
+    expect(state().settings.indicators.emaLengths).toEqual([21]);
   });
 });
