@@ -8,6 +8,7 @@ import type { RootSymbol } from "../market/types";
 const PAGES: Array<{ id: Page; label: string }> = [
   { id: "terminal", label: "Terminal" },
   { id: "blind", label: "Blind Mode" },
+  { id: "flow", label: "Flow Lab" },
   { id: "scenarios", label: "Scenarios" },
   { id: "data", label: "Data" },
   { id: "journal", label: "Journal" },
@@ -79,7 +80,7 @@ export function TopBar({ state }: { state: AppState }) {
         <select
           value={session?.id ?? ""}
           onChange={(e) => void controller.selectSession(e.target.value)}
-          style={{ width: 172 }}
+          style={{ width: 172, maxWidth: "100%" }}
         >
           {sessions.length === 0 && <option value="">no sessions</option>}
           {sessions.map((s) => (
@@ -116,26 +117,20 @@ export function TopBar({ state }: { state: AppState }) {
       </div>
 
       <div className="tb-group" style={{ gap: 18 }}>
-        <div>
+        <div className="tb-stat">
           <span className="tb-label">Balance</span>
-          <br />
           <span className="tb-value sm">{money(sessionStats.endingBalance + position.unrealized)}</span>
         </div>
-        <div>
+        <div className="tb-stat">
           <span className="tb-label">Current P&amp;L</span>
-          <br />
-          <span className={`tb-value sm ${pnlClass(livePnl)}`}>
-            {signedMoney(livePnl)}
-          </span>
+          <span className={`tb-value sm ${pnlClass(livePnl)}`}>{signedMoney(livePnl)}</span>
         </div>
-        <div>
+        <div className="tb-stat">
           <span className="tb-label">Closed</span>
-          <br />
           <span className={`tb-value sm ${pnlClass(stats.netPnl)}`}>{signedMoney(stats.netPnl)}</span>
         </div>
-        <div>
+        <div className="tb-stat">
           <span className="tb-label">Contract</span>
-          <br />
           <span className="tb-value sm">
             {spec.id} · {money(spec.tickValue)}/tick
           </span>

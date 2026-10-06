@@ -10,6 +10,13 @@ This repository now contains two things:
 > **SIMULATED TRADING — HISTORICAL REPLAY.** Tape Lab is a training tool. Fills are
 > simulated with a documented candle-based model; nothing here is a broker fill, and the
 > OHLCV datasets contain **no** Time & Sales, bid/ask or Level-2 information.
+>
+> **SYNTHETIC TRAINING DATA — FLOW LAB.** The Flow Lab order-flow experience runs on a
+> deterministic synthetic event feed (seeded trades + Level-2 snapshots + book resets),
+> labelled *Synthetic Training Data* everywhere it appears. It is never derived from OHLC
+> candles and is never presented as real market data; a real vendor adapter (Databento,
+> Rithmic, …) can later implement the same `MarketDataFeed` interface with no engine or UI
+> changes.
 
 ## Running Tape Lab
 
@@ -33,11 +40,21 @@ bun scripts/verify.ts   # core data / replay / execution checks
   take-profit, flatten and reverse, with a documented candle-based fill model and a
   configurable intrabar ambiguity rule.
 - **Analytics** (`src/indicators`, `src/scoring`, `src/journal`, `src/scenarios`) — VWAP,
-  EMA, opening range, full performance statistics, a multi-factor replay score, blind-mode
+  custom-length EMAs (any period you like, persisted with its own colour), opening range,
+  full performance statistics, a multi-factor replay score, blind-mode
   predictions, tagged historical scenarios and a CSV trade journal.
 - **Future order-flow interfaces** (`src/market/types.ts`, `src/market/feed.ts`) — `Tick`,
   `Trade`, `Quote`, `OrderBookSnapshot` and `TickDataSource` are declared but intentionally
   unimplemented, so a real tick / Level-2 source can be added without redesigning the UI.
+- **Flow Lab** (`src/flow`) — vendor-neutral `MarketDataFeed` interface + a deterministic
+  `SyntheticMarketDataFeed` (seeded regime phases: trending, rotation, volatility, aggression,
+  liquidity pulls/replenishments, absorption, sweeps, delta divergence, breakouts), feeding an
+  `OrderFlowEngine` (tape, delta, CVD, volume-at-price, spread, microprice, velocity, aggression)
+  and a separate `DOMEngine` (top-10 book, imbalance, stacking, pulling, depletion, sweeps).
+  A scenario engine generates five blind-training patterns (Spring, Upthrust, Absorption,
+  Initiative Break, Responsive Fade) with a hidden `ScenarioTruth` exposed only by
+  “Reveal what it was”. Same seed ⇒ identical events; swapping in a real feed later touches
+  nothing below the interface.
 
 ## Datasets
 

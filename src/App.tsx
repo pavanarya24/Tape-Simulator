@@ -6,6 +6,7 @@ import { RightColumn } from "./components/RightColumn";
 import { Chart } from "./components/Chart";
 import { BottomPanel } from "./components/BottomPanel";
 import { BlindPage } from "./pages/BlindPage";
+import { FlowPage } from "./pages/FlowPage";
 import { ScenariosPage } from "./pages/ScenariosPage";
 import { DataPage } from "./pages/DataPage";
 import { JournalPage } from "./pages/JournalPage";
@@ -104,6 +105,7 @@ export default function App() {
         <div className="page">
           <div className="page-inner">
             {state.page === "blind" && <BlindPage state={state} />}
+            {state.page === "flow" && <FlowPage state={state} />}
             {state.page === "scenarios" && <ScenariosPage state={state} />}
             {state.page === "data" && <DataPage state={state} />}
             {state.page === "journal" && <JournalPage state={state} />}

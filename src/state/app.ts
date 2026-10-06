@@ -14,7 +14,12 @@ import { barAt, sliceBarSeries } from "../data/types";
 import { DataRepository } from "../data/repository";
 import type { DatasetSummary } from "../data/db";
 import type { IngestProgress } from "../data/types";
-import { computeIndicators, type IndicatorSeries } from "../indicators/indicators";
+import {
+  computeIndicators,
+  normalizeEmaLengths,
+  MAX_EMA_COUNT,
+  type IndicatorSeries,
+} from "../indicators/indicators";
 import { ReplayEngine, type ReplaySnapshot } from "../replay/ReplayEngine";
 import { ExecutionSimulator } from "../execution/ExecutionSimulator";
 import {
@@ -41,12 +46,30 @@ import {
   type ScenarioId,
   type SessionClassification,
 } from "../scenarios/scenarios";
-import { loadSettings, saveSettings, type Settings } from "./settings";
+import {
+  DEFAULT_EMA_COLORS,
+  DEFAULT_EMA_LENGTHS,
+  DEFAULT_SETTINGS,
+  DEFAULT_VWAP_COLOR,
+  EMA_PALETTE,
+  loadSettings,
+  saveSettings,
+  type Settings,
+} from "./settings";
+import type { DOMSnapshot, Level } from "../flow/dom";
+import type { OrderFlowSnapshot } from "../flow/orderFlow";
+import {
+  generateScenario,
+  pickScenarioId,
+  type FlowScenarioId,
+  type ScenarioTruth,
+} from "../flow/scenarios";
+import { TrainingEngine } from "../flow/training";
 
 /** Opening ranges are defined against the 09:30 America/New_York cash open. */
 const OR_ANCHOR_TZ = "America/New_York";
 
-export type Page = "terminal" | "blind" | "scenarios" | "data" | "journal" | "score";
+export type Page = "terminal" | "blind" | "flow" | "scenarios" | "data" | "journal" | "score";
 
 export interface BlindState {
   active: boolean;
@@ -61,6 +84,46 @@ export interface PendingPrediction {
   time: number;
   startPrice: number;
 }
+
+/**
+ * Blind-safe order-flow training state.
+ *
+ * Contains everything the trader may see (tape, CVD, profile, DOM, stats) and
+ * the feed's honest source label. `revealed` stays NULL until the user clicks
+ * "Reveal what it was" — before that, no pattern name, ScenarioTruth,
+ * confidence or scenario id ever enters UI state.
+ */
+export interface FlowState {
+  active: boolean;
+  source: string;
+  isRealData: boolean;
+  eventIndex: number;
+  totalEvents: number;
+  atEnd: boolean;
+  orderFlow: OrderFlowSnapshot | null;
+  dom: DOMSnapshot | null;
+  book: { bids: Level[]; asks: Level[] } | null;
+  priceSeries: Array<{ t: number; price: number }>;
+  /** Null until the reveal button is pressed — the ONLY exposure mechanism. */
+  revealed: ScenarioTruth | null;
+}
+
+const FLOW_IDLE: FlowState = {
+  active: false,
+  source: "Synthetic Training Data",
+  isRealData: false,
+  eventIndex: 0,
+  totalEvents: 0,
+  atEnd: true,
+  orderFlow: null,
+  dom: null,
+  book: null,
+  priceSeries: [],
+  revealed: null,
+};
+
+/** Events auto-revealed when a scenario is generated, so the tape has context. */
+const FLOW_WARMUP = 60;
 
 export interface AppState {
   ready: boolean;
@@ -88,6 +151,7 @@ export interface AppState {
   scenarioMatches: Array<{ scenario: ScenarioId; sessions: Array<{ meta: SessionMeta; score: number }> }>;
   classifying: boolean;
   currentClassification: SessionClassification | null;
+  flow: FlowState;
 }
 
 interface ActionEntry {
@@ -118,6 +182,10 @@ export class TapeLabController {
   scenarioMatches: AppState["scenarioMatches"] = [];
   classifying = false;
   currentClassification: SessionClassification | null = null;
+
+  private flowTraining: TrainingEngine | null = null;
+  private flowTruth: ScenarioTruth | null = null;
+  private flowRevealed = false;
 
   private actions: ActionEntry[] = [];
   private notesByKey = new Map<string, JournalNotes>();
@@ -226,6 +294,7 @@ export class TapeLabController {
       scenarioMatches: this.scenarioMatches,
       classifying: this.classifying,
       currentClassification: this.currentClassification,
+      flow: this.flowState(),
     };
     this.cacheVersion = this.version;
     return this.cache;
@@ -287,6 +356,7 @@ export class TapeLabController {
       sb.bars,
       this.settings.openingRangeMinutes,
       OR_ANCHOR_TZ,
+      this.settings.indicators.emaLengths,
     );
     this.currentClassification = classifySession(
       sb.bars,
@@ -495,7 +565,8 @@ export class TapeLabController {
     this.refreshExecution();
   }
 
-  toggleIndicator(key: keyof Settings["indicators"]): void {
+  /** The only overlay toggles left: everything else is a length or a colour. */
+  toggleIndicator(key: "vwap" | "openingRange"): void {
     this.updateSettings({
       indicators: { ...this.settings.indicators, [key]: !this.settings.indicators[key] },
     });
@@ -505,10 +576,80 @@ export class TapeLabController {
     this.settings = { ...this.settings, openingRangeMinutes: minutes };
     this.persist();
     if (this.session) {
-      this.indicators = computeIndicators(this.session.bars, minutes, OR_ANCHOR_TZ);
+      this.indicators = computeIndicators(
+        this.session.bars,
+        minutes,
+        OR_ANCHOR_TZ,
+        this.settings.indicators.emaLengths,
+      );
       this.currentClassification = classifySession(this.session.bars, OR_ANCHOR_TZ, minutes);
     }
     this.notify();
+  }
+
+  /* ------------------------------ overlays ------------------------------ */
+
+  /**
+   * Replace the user's EMA length list. Lengths are rounded, bounds-checked,
+   * de-duplicated and sorted; the list is capped at `MAX_EMA_COUNT`. Newly
+   * added periods get the next colour from the palette so they are always
+   * distinguishable on the chart.
+   */
+  setEmaLengths(lengths: readonly number[]): void {
+    const clean = normalizeEmaLengths(lengths).slice(0, MAX_EMA_COUNT);
+    const emaColors = { ...this.settings.indicators.emaColors };
+    clean.forEach((len, i) => {
+      if (!emaColors[String(len)]) emaColors[String(len)] = EMA_PALETTE[i % EMA_PALETTE.length];
+    });
+    this.settings = {
+      ...this.settings,
+      indicators: { ...this.settings.indicators, emaLengths: clean, emaColors },
+    };
+    this.persist();
+    this.recomputeIndicators();
+    this.notify();
+  }
+
+  /** Colour for one EMA period (persisted). */
+  setEmaColor(length: number, color: string): void {
+    this.updateSettings({
+      indicators: {
+        ...this.settings.indicators,
+        emaColors: { ...this.settings.indicators.emaColors, [String(length)]: color },
+      },
+    });
+  }
+
+  setVwapColor(color: string): void {
+    this.updateSettings({
+      indicators: { ...this.settings.indicators, vwapColor: color },
+    });
+  }
+
+  /** Restore the stock overlay configuration (EMA 21 only, default colours). */
+  resetOverlayDefaults(): void {
+    this.settings = {
+      ...this.settings,
+      indicators: {
+        ...DEFAULT_SETTINGS.indicators,
+        emaLengths: [...DEFAULT_EMA_LENGTHS],
+        emaColors: { ...DEFAULT_EMA_COLORS },
+        vwapColor: DEFAULT_VWAP_COLOR,
+      },
+    };
+    this.persist();
+    this.recomputeIndicators();
+    this.notify();
+  }
+
+  private recomputeIndicators(): void {
+    if (!this.session) return;
+    this.indicators = computeIndicators(
+      this.session.bars,
+      this.settings.openingRangeMinutes,
+      OR_ANCHOR_TZ,
+      this.settings.indicators.emaLengths,
+    );
   }
 
   /** Re-run the session deterministically after an execution-model change. */
@@ -650,6 +791,71 @@ export class TapeLabController {
     });
     this.pendingPrediction = null;
     this.blind = { ...this.blind, awaitingReveal: false };
+    this.notify();
+  }
+
+  /* ------------------------- order-flow training ------------------------- */
+
+  private flowState(): FlowState {
+    const training = this.flowTraining;
+    if (!training) return FLOW_IDLE;
+    const snap = training.snapshot();
+    return {
+      active: true,
+      source: snap.source,
+      isRealData: snap.isRealData,
+      eventIndex: snap.eventIndex,
+      totalEvents: snap.totalEvents,
+      atEnd: snap.atEnd,
+      orderFlow: snap.orderFlow,
+      dom: snap.dom,
+      book: snap.book,
+      priceSeries: snap.priceSeries,
+      revealed: this.flowRevealed ? this.flowTruth : null,
+    };
+  }
+
+  /**
+   * Generate a fresh deterministic order-flow scenario. `"any"` picks a random
+   * pattern; a specific id generates exactly that pattern. The seed is drawn
+   * from wall-clock entropy, but once generated the session is fully
+   * deterministic (same id + seed ⇒ identical events and truth).
+   */
+  generateFlowScenario(pattern: FlowScenarioId | "any"): void {
+    const seed = (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+    const id = pattern === "any" ? pickScenarioId(seed ^ 0x51ed270b) : pattern;
+    const generated = generateScenario(id, seed);
+    this.flowTraining = new TrainingEngine(generated.feed, generated.truth);
+    this.flowTruth = generated.truth;
+    this.flowRevealed = false;
+    this.flowTraining.stepForward(FLOW_WARMUP);
+    this.notify();
+  }
+
+  /** Advance the flow session; returns false when nothing was revealed. */
+  stepFlow(n = 1): boolean {
+    if (!this.flowTraining) return false;
+    const taken = this.flowTraining.stepForward(n);
+    this.notify();
+    return taken > 0;
+  }
+
+  stepFlowBack(): void {
+    if (!this.flowTraining) return;
+    this.flowTraining.stepBack();
+    this.notify();
+  }
+
+  resetFlow(): void {
+    if (!this.flowTraining) return;
+    this.flowTraining.reset();
+    this.notify();
+  }
+
+  /** "Reveal what it was" — the only mechanism that exposes the truth to UI. */
+  revealFlow(): void {
+    if (!this.flowTraining) return;
+    this.flowRevealed = true;
     this.notify();
   }
 
