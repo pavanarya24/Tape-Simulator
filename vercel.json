@@ -1,4 +1,7 @@
 {
   "version": 2,
-  "cleanUrls": true
+  "framework": "vite",
+  "buildCommand": "bun run build",
+  "outputDirectory": "dist",
+  "installCommand": "bun install"
 }
