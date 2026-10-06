@@ -45,8 +45,9 @@ export interface TrainingSnapshot {
   dom: DOMSnapshot;
   /** Latest book (mirrored from the DOM engine for convenient rendering). */
   book: { bids: Level[]; asks: Level[] } | null;
-  /** Revealed traded-price path (bounded, decimated). */
-  priceSeries: Array<{ t: number; price: number }>;
+  /** Revealed traded-price path (bounded, decimated). `sequence` tags the
+   *  exact event so consumers never have to map by array index. */
+  priceSeries: Array<{ t: number; price: number; sequence: number }>;
 }
 
 export class TrainingEngine {
@@ -57,7 +58,7 @@ export class TrainingEngine {
   private consumed = 0;
   private lastTimestamp: number | null = null;
   private lastSequence = 0;
-  private priceSeries: Array<{ t: number; price: number }> = [];
+  private priceSeries: Array<{ t: number; price: number; sequence: number }> = [];
 
   constructor(feed: MarketDataFeed, truth: ScenarioTruth | null = null) {
     this.feed = feed;
@@ -119,7 +120,7 @@ export class TrainingEngine {
     this.of.processEvent(ev);
     this.dom.processEvent(ev);
     if (ev.kind === "trade") {
-      this.priceSeries.push({ t: ev.timestamp, price: ev.price });
+      this.priceSeries.push({ t: ev.timestamp, price: ev.price, sequence: ev.sequence });
       if (this.priceSeries.length > PRICE_SERIES_KEEP) {
         // Deterministic decimation: drop every other point once, keeping order.
         this.priceSeries = this.priceSeries.filter((_, i) => i % 2 === 0);

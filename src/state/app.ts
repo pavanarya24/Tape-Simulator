@@ -61,9 +61,16 @@ import type { OrderFlowSnapshot } from "../flow/orderFlow";
 import {
   generateScenario,
   pickScenarioId,
+  type FlowDifficulty,
   type FlowScenarioId,
   type ScenarioTruth,
 } from "../flow/scenarios";
+import type {
+  FlowAnnotation,
+  FlowEvidence,
+  FlowRecognition,
+  FlowTimelineEntry,
+} from "../flow/recognition";
 import { FlowTrainingSession, type FlowNotice } from "../flow/session";
 import {
   DEFAULT_FLOW_COSTS,
@@ -75,7 +82,11 @@ import {
   type FlowRisk,
 } from "../flow/execution";
 import type { FlowTradeView } from "../flow/journal";
-import type { FlowSessionResults } from "../flow/scoring";
+import {
+  computeFlowTrainingStats,
+  type FlowSessionResults,
+  type FlowTrainingStats,
+} from "../flow/scoring";
 
 /** Opening ranges are defined against the 09:30 America/New_York cash open. */
 const OR_ANCHOR_TZ = "America/New_York";
@@ -130,6 +141,19 @@ export interface FlowState {
   trades: FlowTradeView[];
   /** Post-reveal ONLY — null before reveal (blind-mode guarantee). */
   results: FlowSessionResults | null;
+  /* --- Phase 7B recognition & training intelligence --- */
+  /** Scenario difficulty used by the generator (never encodes the pattern). */
+  difficulty: FlowDifficulty;
+  /** Objective observations — safe to show while blind (spec §5/§6). */
+  evidence: FlowEvidence[];
+  /** Objective chart markers mapped by timestamp/sequence (spec §9). */
+  annotations: FlowAnnotation[];
+  /** Evidence timeline — empty until reveal (spec §8). */
+  timeline: FlowTimelineEntry[];
+  /** ENGINE'S CLASSIFICATION — null until reveal (blind rule §14). */
+  recognition: FlowRecognition | null;
+  /** Raw cross-scenario training metrics — null until the first reveal. */
+  trainingStats: FlowTrainingStats | null;
 }
 
 const FLOW_IDLE_POSITION: FlowPosition = {
@@ -168,6 +192,12 @@ const FLOW_IDLE: FlowState = {
   notice: null,
   trades: [],
   results: null,
+  difficulty: "INTERMEDIATE",
+  evidence: [],
+  annotations: [],
+  timeline: [],
+  recognition: null,
+  trainingStats: null,
 };
 
 /** Events auto-revealed when a scenario is generated, so the tape has context. */
@@ -240,6 +270,11 @@ export class TapeLabController {
   private flowRisk: FlowRisk = { ...DEFAULT_FLOW_RISK };
   /** Monotonic scenario-instance counter — journal ids carry NO seed/pattern. */
   private flowScenarioSeq = 0;
+  /** Difficulty handed to the generator — affects structure, not labels. */
+  private flowDifficulty: FlowDifficulty = "INTERMEDIATE";
+  /** Every revealed scenario's results — the raw material for training stats. */
+  private flowHistory: FlowSessionResults[] = [];
+  private flowStats: FlowTrainingStats | null = null;
 
   private actions: ActionEntry[] = [];
   private notesByKey = new Map<string, JournalNotes>();
@@ -876,6 +911,14 @@ export class TapeLabController {
       trades: snap.trades,
       // Double-gated: scoring only runs after reveal AND inside the session.
       results: this.flowRevealed ? session.results() : null,
+      difficulty: this.flowDifficulty,
+      evidence: snap.evidence,
+      annotations: snap.annotations,
+      timeline: snap.timeline,
+      recognition: snap.recognition,
+      // Training stats reference past reveals (incl. confidence) — while
+      // blind on a fresh scenario they stay out of trader-facing state.
+      trainingStats: this.flowRevealed ? this.flowStats : null,
     };
   }
 
@@ -888,7 +931,7 @@ export class TapeLabController {
   generateFlowScenario(pattern: FlowScenarioId | "any"): void {
     const seed = (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
     const id = pattern === "any" ? pickScenarioId(seed ^ 0x51ed270b) : pattern;
-    const generated = generateScenario(id, seed);
+    const generated = generateScenario(id, seed, { difficulty: this.flowDifficulty });
     this.flowScenarioSeq++;
     this.flowSession = new FlowTrainingSession(generated.feed, generated.truth, {
       // Neutral instance id: never derived from the seed, so pre-reveal state
@@ -939,9 +982,25 @@ export class TapeLabController {
   revealFlow(): void {
     const session = this.flowSession;
     if (!session) return;
+    const firstReveal = !this.flowRevealed;
     this.flowRevealed = true;
     this.flowHeld = true;
     session.markRevealed();
+    // Record this scenario's result once — training stats accumulate across
+    // the whole training run from these raw results.
+    if (firstReveal) {
+      const results = session.results();
+      if (results) {
+        this.flowHistory = [...this.flowHistory, results];
+        this.flowStats = computeFlowTrainingStats(this.flowHistory);
+      }
+    }
+    this.notify();
+  }
+
+  /** Difficulty selector — passed to the generator on the next GENERATE. */
+  setFlowDifficulty(difficulty: FlowDifficulty): void {
+    this.flowDifficulty = difficulty;
     this.notify();
   }
 

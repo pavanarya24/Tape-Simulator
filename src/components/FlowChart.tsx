@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { VolumeAtPrice } from "../flow/orderFlow";
+import type { FlowAnnotation, FlowAnnotationType } from "../flow/recognition";
 
 interface FlowChartProps {
   priceSeries: Array<{ t: number; price: number }>;
@@ -8,6 +9,9 @@ interface FlowChartProps {
   showCvd: boolean;
   showProfile: boolean;
   vwap: number | null;
+  /** Observable event markers — mapped by timestamp, never array index. */
+  annotations?: FlowAnnotation[];
+  showAnnotations?: boolean;
 }
 
 /* Canvas-drawn chart for the Flow Lab: traded-price path, CVD band and a
@@ -25,7 +29,26 @@ const C = {
   text: "#7c8894",
 };
 
-export function FlowChart({ priceSeries, cvdSeries, profile, showCvd, showProfile, vwap }: FlowChartProps) {
+const ANNOTATION_COLORS: Record<FlowAnnotationType, string> = {
+  aggression: "#4d8ff0",
+  concentration: "#a78bfa",
+  sweep: "#e5484d",
+  divergence: "#7dd3fc",
+  breakout: "#2fbf71",
+  rejection: "#e6a93c",
+  replenishment: "#4dd0e1",
+};
+
+export function FlowChart({
+  priceSeries,
+  cvdSeries,
+  profile,
+  showCvd,
+  showProfile,
+  vwap,
+  annotations = [],
+  showAnnotations = true,
+}: FlowChartProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
@@ -116,6 +139,49 @@ export function FlowChart({ priceSeries, cvdSeries, profile, showCvd, showProfil
         ctx.fill();
       }
 
+      // observable event markers — timestamp/sequence mapped onto the path
+      // (priceSeries is decimated, so index mapping would land in the wrong
+      // place; we interpolate by time between neighbouring points instead).
+      if (showAnnotations && annotations.length > 0 && priceSeries.length > 1) {
+        const t0 = priceSeries[0].t;
+        const tEnd = priceSeries[priceSeries.length - 1].t;
+        const drawn = Math.min(annotations.length, 150);
+        for (let k = 0; k < drawn; k++) {
+          const a = annotations[k];
+          if (a.t < t0 || a.t > tEnd) continue;
+          let lo = 0;
+          let hi = priceSeries.length - 1;
+          while (hi - lo > 1) {
+            const mid = (lo + hi) >> 1;
+            if (priceSeries[mid].t <= a.t) lo = mid;
+            else hi = mid;
+          }
+          const pa = priceSeries[lo];
+          const pb = priceSeries[hi];
+          const span = pb.t - pa.t;
+          const frac = span > 0 ? Math.min(1, Math.max(0, (a.t - pa.t) / span)) : 0;
+          const idxF = lo + frac;
+          const price = pa.price + (pb.price - pa.price) * frac;
+          const x = 40 + (mainW * idxF) / Math.max(1, priceSeries.length - 1);
+          const y = py(price);
+          ctx.globalAlpha = a.interpretive ? 0.95 : 0.7;
+          ctx.fillStyle = ANNOTATION_COLORS[a.type] ?? C.text;
+          ctx.beginPath();
+          ctx.arc(x, y, a.interpretive ? 4 : 3, 0, Math.PI * 2);
+          ctx.fill();
+          if (a.interpretive) {
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = "#0a0d10";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.font = "9px IBM Plex Mono, monospace";
+            ctx.fillStyle = ANNOTATION_COLORS[a.type] ?? C.text;
+            ctx.fillText(a.label.toUpperCase(), x + 6, y - 6);
+          }
+          ctx.globalAlpha = 1;
+        }
+      }
+
       // CVD band
       if (showCvd && cvdSeries.length > 1 && cvdH > 24) {
         let cLo = Math.min(...cvdSeries);
@@ -166,7 +232,7 @@ export function FlowChart({ priceSeries, cvdSeries, profile, showCvd, showProfil
     const onResize = () => draw();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [priceSeries, cvdSeries, profile, showCvd, showProfile, vwap]);
+  }, [priceSeries, cvdSeries, profile, showCvd, showProfile, vwap, annotations, showAnnotations]);
 
   return (
     <div ref={wrapRef} style={{ width: "100%", height: "100%", minHeight: 320 }}>

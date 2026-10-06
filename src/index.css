@@ -1373,6 +1373,139 @@ textarea {
   min-width: 860px;
 }
 
+/* ------------------------- flow recognition (Phase 7B) ------------------------- */
+
+.flow-evidence-list {
+  display: grid;
+  gap: 4px;
+}
+
+.flow-evidence-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) 74px minmax(0, 1fr) 78px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  font-size: 11px;
+}
+
+.fe-metric {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fe-strength {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-align: center;
+  border: 1px solid var(--line);
+  padding: 2px 4px;
+  color: var(--dim);
+}
+
+.fe-strength.hot {
+  color: var(--accent, #e6a93c);
+  border-color: var(--accent, #e6a93c);
+}
+
+.fe-value {
+  font-size: 11px;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fe-seq {
+  font-size: 9.5px;
+  text-align: right;
+}
+
+.flow-recog-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+}
+
+@media (max-width: 1100px) {
+  .flow-recog-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.flow-signal-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.flow-signal-chips .badge {
+  font-size: 9.5px;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+.flow-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.flow-timeline li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-left: 2px solid var(--line);
+  background: var(--panel-2);
+}
+
+.flow-timeline li.imp {
+  border-left-color: var(--accent, #e6a93c);
+}
+
+.tl-seq {
+  font-size: 9.5px;
+  color: var(--dim);
+  letter-spacing: 0.06em;
+  flex: 0 0 auto;
+}
+
+.tl-label {
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-timeline li.imp .tl-label {
+  color: inherit;
+}
+
+.tl-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent, #e6a93c);
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
 .flow-results-card {
   margin-top: 14px;
 }
