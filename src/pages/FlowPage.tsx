@@ -380,8 +380,20 @@ export function FlowPage({ state }: { state: AppState }) {
         <div className="card-head">
           <h3>Tape</h3>
           <div className="right chips">
-            <button className={`chip ${showCvd ? "on" : ""}`} onClick={() => setShowCvd((v) => !v)}>Show CVD</button>
-            <button className={`chip ${showProfile ? "on" : ""}`} onClick={() => setShowProfile((v) => !v)}>Show profile</button>
+            <button
+              className={`chip ${showCvd ? "on" : ""}`}
+              onClick={() => setShowCvd((v) => !v)}
+              title="Cumulative volume delta pane below the candles"
+            >
+              Show CVD
+            </button>
+            <button
+              className={`chip ${showProfile ? "on" : ""}`}
+              onClick={() => setShowProfile((v) => !v)}
+              title="Volume-at-price profile in the right-hand gutter"
+            >
+              Show profile
+            </button>
             <button className={`chip ${showDom ? "on" : ""}`} onClick={() => setShowDom((v) => !v)}>Show DOM</button>
             <button
               className={`chip ${showMarkers ? "on" : ""}`}
@@ -392,10 +404,11 @@ export function FlowPage({ state }: { state: AppState }) {
             </button>
           </div>
         </div>
-        <div style={{ height: 400 }}>
+        <div style={{ height: 440 }}>
           <FlowChart
             priceSeries={flow.priceSeries}
             cvdSeries={of?.cvdSeries ?? []}
+            tradeCount={of?.tradeCount ?? 0}
             profile={of?.volumeAtPrice ?? []}
             showCvd={showCvd}
             showProfile={showProfile}
@@ -404,6 +417,11 @@ export function FlowPage({ state }: { state: AppState }) {
             showAnnotations={showMarkers}
           />
         </div>
+        <p className="dim" style={{ fontSize: 10, margin: "8px 0 0", lineHeight: 1.5 }}>
+          Candles are time-bucketed OHLC aggregates of the revealed synthetic tape — the generator
+          never consumes OHLC data. Axes: price (right of the plot) · time (bottom, New York tape
+          clock). The CVD pane shares the time axis; the profile gutter scales to the price axis.
+        </p>
       </div>
 
       <div className="flow-grid">
