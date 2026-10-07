@@ -287,9 +287,10 @@ export function FlowPage({ state }: { state: AppState }) {
 
       {/* ================== 8.5 MARKET WORKSPACE (sticky) ================== */}
       <section className={flowWorkspaceClass(workspaceMode)} aria-label="Market workspace">
-      <div className="card flow-workspace-chart">
-        <div className="card-head">
-          <h3>Price / Flow chart</h3>
+      <div className="flow-workspace-inner">
+        <div className="card flow-workspace-chart">
+          <div className="card-head">
+            <h3>Price / Flow chart</h3>
           <div className="right chips">
             <button
               className="chip"
@@ -447,6 +448,7 @@ export function FlowPage({ state }: { state: AppState }) {
           </p>
         </section>
       </aside>
+      </div>
       </section>
 
       {/* ============ 8.5 TRAINING WORKSPACE — Order flow | Execution ============ */}
