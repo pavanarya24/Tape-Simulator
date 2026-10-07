@@ -1873,3 +1873,232 @@ textarea {
 .tl-jump:hover {
   color: var(--accent);
 }
+
+/* ================= Phase 8.5 — Flow Lab professional workspace =================
+
+   Layering model (single source of truth — no arbitrary per-component z-index):
+     grid row 1  .topbar                 app header — NOT positioned, paints in
+                                         order and always precedes .page
+                                         (no z-index needed; never "covers" it)
+     --z-workspace: 30  .flow-workspace  sticky market workspace (chart | tape/DOM)
+                                         during page scroll
+     --z-dock:      40  .flow-dock       persistent sticky replay dock
+
+   Scroll architecture (unchanged app shell): .app is a fixed-height grid with
+   overflow hidden; .topbar is row 1 and .page (row 2, overflow-y auto) is the
+   single page scroll container that already starts BELOW the header. Sticky
+   `top: 0` therefore pins flush under the topbar at every wrap height — no
+   measured header height required. --flow-header-height documents the topbar
+   min-height for reference/tooling; it is deliberately NOT a magic sticky
+   offset (top: var(--flow-header-height) inside .page would add a growing
+   dead gap whenever the topbar wraps).
+
+   Reserving vertical space: .flow-workspace is the page-flow layout block
+   (normal column sizing); .flow-workspace-inner is the sticky twin that pins
+   at top: 0 while the outer still occupies its full height, and below 630px
+   tall viewports it becomes static so the workspace never overflows the
+   screen. .flow-dock-spacer keeps the sticky replay dock from covering the
+   last cards at the end of the page.
+   ============================================================================ */
+
+:root {
+  --flow-header-height: 52px; /* informational only — .topbar min-height;
+                                 .page is the single scroll container and
+                                 starts below the header, so sticky top
+                                 stays 0 (see header comment) */
+  --z-workspace: 30;
+  --z-dock: 40;
+}
+
+/* ---- sticky market workspace: chart left ~70% | tape/DOM right ~30% ---- */
+
+.flow-workspace {
+  position: relative;
+  margin-bottom: 14px;
+}
+
+.flow-workspace-inner {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-workspace);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 32%);
+  gap: 14px;
+  align-items: stretch;
+  padding-bottom: 14px;
+  background: var(--bg);
+  box-shadow: 0 12px 26px -20px rgba(0, 0, 0, 0.95);
+}
+
+.flow-workspace-chart {
+  margin-bottom: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* replaces the old fixed height:460 wrapper — fills the workspace cell;
+   the canvas itself is never independently scrollable */
+.flow-workspace-canvas {
+  flex: 1 1 auto;
+  height: min(58vh, 680px);
+  min-height: 300px;
+}
+
+/* compact presentation mode (default expanded) — shrinks canvas only;
+   no chart/tape/DOM content is hidden */
+.flow-ws-compact .flow-workspace-canvas {
+  height: min(38vh, 430px);
+  min-height: 240px;
+}
+
+.flow-workspace-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  margin-bottom: 0;
+}
+
+/* both side panels keep the dense screen-panel language */
+.flow-ws-tape,
+.flow-ws-dom {
+  border: 1px solid var(--line);
+  margin-bottom: 0;
+}
+
+/* tape fills the leftover side space; the print table scrolls internally
+   (spec §8B.2 behavior preserved) */
+.flow-ws-tape {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.flow-ws-tape .panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.flow-ws-tape .table {
+  margin-top: 8px;
+}
+
+/* deterministic DOM panel keeps its documented height */
+.flow-ws-dom .panel-body {
+  height: 404px;
+  overflow-y: auto;
+}
+
+/* ---- persistent replay dock (bottom) ---- */
+
+.flow-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-dock);
+  margin: 14px 0;
+  padding-top: 10px;
+  background: var(--bg);
+}
+
+.flow-dock > .card {
+  margin-bottom: 0;
+  box-shadow: 0 -14px 30px -22px rgba(0, 0, 0, 0.95);
+}
+
+/* compact wrap-friendly dock: no clipped buttons at 1024–1280 */
+.flow-dock .flow-controls {
+  row-gap: 8px;
+}
+
+.flow-dock .flow-controls .field {
+  min-width: 130px;
+  max-width: 170px;
+  flex: 0 1 auto;
+}
+
+.flow-dock .flow-controls .btn {
+  padding: 7px 9px;
+  font-size: 10px;
+}
+
+.flow-dock .flow-timeline-scrub {
+  margin-top: 10px;
+  gap: 8px;
+}
+
+/* keeps the last cards from hiding under the sticky dock */
+.flow-dock-spacer {
+  height: 140px;
+  margin-bottom: -14px;
+}
+
+/* slim replay-notes card after the dock */
+.flow-replay-notes > .card-body {
+  padding: 9px 13px;
+}
+
+/* one-line pointer added under the page h2 */
+.lede-flow-note {
+  color: var(--dimmer);
+  font-size: 11px;
+  margin: -12px 0 14px;
+}
+
+/* ---- responsive: never horizontal overflow, stack below ~1120px ---- */
+
+@media (max-width: 1280px) {
+  .flow-workspace-inner {
+    grid-template-columns: minmax(0, 1fr) minmax(252px, 30%);
+  }
+}
+
+@media (max-width: 1120px) {
+  /* mobile/narrow: workspace participates in normal page scroll and stacks
+     chart → tape → DOM */
+  .flow-workspace-inner {
+    position: static;
+    box-shadow: none;
+  }
+  .flow-workspace {
+    position: static;
+  }
+  .flow-workspace-canvas {
+    height: min(52vh, 560px);
+  }
+  .flow-dock {
+    position: static;
+  }
+}
+
+@media (max-width: 720px) {
+  .flow-workspace-canvas {
+    height: min(46vh, 460px);
+  }
+  .flow-dock {
+    position: static;
+  }
+  .flow-dock .flow-controls .btn {
+    padding: 7px 9px;
+    font-size: 10.5px;
+  }
+  .flow-dock-spacer {
+    height: 12px;
+  }
+}
+
+@media (max-height: 630px) {
+  .flow-workspace-inner {
+    position: static;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-dock > .card,
+  .flow-workspace-inner {
+    box-shadow: none;
+  }
+}

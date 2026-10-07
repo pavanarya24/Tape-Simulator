@@ -23,6 +23,7 @@ import { BOOK_CHANGE_LABELS, countChanges, type BookChange } from "../flow/domDi
 import { FLOW_SHORTCUT_KEYS, isTypingTarget, resolveFlowShortcut } from "../flow/keyboard";
 import { INSUFFICIENT_SAMPLE_LABEL, type FlowAnalytics } from "../flow/analytics";
 import type { FlowReview } from "../flow/review";
+import { DEFAULT_WORKSPACE_MODE, flowWorkspaceClass, toggleWorkspaceMode, type FlowWorkspaceMode } from "../flow/workspace";
 
 const ANCHOR_TZ = "America/New_York";
 
@@ -91,6 +92,9 @@ export function FlowPage({ state }: { state: AppState }) {
   const [showTradeMarkers, setShowTradeMarkers] = useState(true);
   const [tapeFilter, setTapeFilter] = useState<TapeFilter>("ALL");
   const [playing, setPlaying] = useState(false);
+  /* Phase 8.5 — pure presentation state: compact vs expanded market workspace.
+     Never touches replay, execution, scoring, blind gating or analytics. */
+  const [workspaceMode, setWorkspaceMode] = useState<FlowWorkspaceMode>(DEFAULT_WORKSPACE_MODE);
 
   /* ---- playback: speed changes whole-event batch size + tick rate only,
          never the order of the single event clock (spec §8A.1) ---- */
@@ -192,6 +196,10 @@ export function FlowPage({ state }: { state: AppState }) {
   return (
     <>
       <h2>Flow Lab — professional replay &amp; training</h2>
+      <p className="lede-flow-note">
+        Market workspace (chart · Time &amp; Sales · DOM) stays pinned while you work below. Replay
+        controls live in the persistent dock at the bottom of the viewport.
+      </p>
       <p className="lede">
         READ → DECIDE → EXECUTE → MANAGE → SCORE. One event clock drives every panel: price, Time
         &amp; Sales, DOM, CVD, profile, order flow, AMA, VWAP, evidence, recognition and P&amp;L all
@@ -277,11 +285,19 @@ export function FlowPage({ state }: { state: AppState }) {
         </div>
       </div>
 
-      {/* ============================== CHART ============================== */}
-      <div className="card">
+      {/* ================== 8.5 MARKET WORKSPACE (sticky) ================== */}
+      <section className={flowWorkspaceClass(workspaceMode)} aria-label="Market workspace">
+      <div className="card flow-workspace-chart">
         <div className="card-head">
           <h3>Price / Flow chart</h3>
           <div className="right chips">
+            <button
+              className="chip"
+              onClick={() => setWorkspaceMode(toggleWorkspaceMode(workspaceMode))}
+              title="Compact / expanded market workspace — presentation only, never affects replay, execution or scoring"
+            >
+              {workspaceMode === "compact" ? "EXPAND ⤢" : "COMPACT ⤡"}
+            </button>
             <button className={`chip ${showCvd ? "on" : ""}`} onClick={() => setShowCvd((v) => !v)} title="Cumulative volume delta pane">
               CVD
             </button>
@@ -311,7 +327,7 @@ export function FlowPage({ state }: { state: AppState }) {
             </span>
           </div>
         </div>
-        <div style={{ height: 460 }}>
+        <div className="flow-workspace-canvas">
           <FlowChart
             priceSeries={flow.priceSeries}
             cvdSeries={of?.cvdSeries ?? []}
@@ -337,10 +353,9 @@ export function FlowPage({ state }: { state: AppState }) {
         </p>
       </div>
 
-      {/* ====================== TAPE | DOM ====================== */}
-      <div className="flow-grid">
+      <aside className="flow-workspace-side">
         {/* ---- 8B.2 Time & Sales ---- */}
-        <section className="panel">
+        <section className="panel flow-ws-tape">
           <div className="panel-head">
             <span className="panel-title">Time &amp; Sales</span>
             <div className="right chips">
@@ -388,7 +403,7 @@ export function FlowPage({ state }: { state: AppState }) {
         </section>
 
         {/* ---- 8B.3 DOM ---- */}
-        <section className="panel">
+        <section className="panel flow-ws-dom">
           <div className="panel-head">
             <span className="panel-title">DOM / Level 2</span>
             <span className="right badge">
@@ -431,11 +446,11 @@ export function FlowPage({ state }: { state: AppState }) {
             revealed event.
           </p>
         </section>
-      </div>
+      </aside>
+      </section>
 
-      {/* ====================== ORDER FLOW | EXECUTION ====================== */}
-      <div className="flow-grid">
-        {/* ---- 8B.4 Order flow ---- */}
+      {/* ============ 8.5 TRAINING WORKSPACE — Order flow | Execution ============ */}
+      <div className="flow-grid flow-training-start">
         <section className="panel">
           <div className="panel-head">
             <span className="panel-title">Order flow</span>
@@ -637,7 +652,8 @@ export function FlowPage({ state }: { state: AppState }) {
         </div>
       </div>
 
-      {/* ====================== 8A REPLAY CONTROLS / TIMELINE ====================== */}
+      {/* ============ 8.5 PERSISTENT REPLAY DOCK (sticky bottom) ============ */}
+      <section className="flow-dock" aria-label="Replay controls">
       <div className="card flow-replay-bar">
         <div className="card-head">
           <h3>Replay controls / timeline</h3>
@@ -692,8 +708,7 @@ export function FlowPage({ state }: { state: AppState }) {
             </button>
             {flow.revealed && flow.held && (
               <button className="btn primary" onClick={() => controller.continueFlowAfterReveal()}>
-                CONTINUE AFTER REVEAL
-              </button>
+                CONTINUE AFTER REVEAL</button>
             )}
           </div>
 
@@ -714,11 +729,20 @@ export function FlowPage({ state }: { state: AppState }) {
           <div className="flow-progress" title={`${flow.progressPct}% revealed`}>
             <div style={{ width: `${flow.progressPct}%` }} />
           </div>
-          <p className="dim" style={{ fontSize: 10, margin: "9px 0 0", lineHeight: 1.5 }}>
-            {flow.policy.forwardSeek
-              ? "Review mode: seek anywhere. Every jump rebuilds events 0..N deterministically, so the state is identical to reset → replay."
-              : "Blind modes seek backward only — no future event is ever read. Seeking rebuilds events 0..N deterministically."}
-            {" "}Single event clock: price, tape, DOM, CVD, profile, AMA, VWAP, evidence, recognition and P&L all advance together.
+            <span className="dim" style={{ fontSize: 10 }}>
+              {flow.progressPct}% revealed · single event clock
+            </span>
+        </div>
+      </div>
+      </section>
+
+      {/* Replay semantics/keyboard documentation — slim notes card after the
+          persistent dock so the dock itself stays compact (Phase 8.5). No state. */}
+      <div className="card flow-replay-notes">
+        <div className="card-body">
+          <p className="dim" style={{ fontSize: 10, margin: "2px 0 0", lineHeight: 1.5 }}>
+            Replay jump semantics and the keyboard legend live here so the persistent dock stays
+            compact.
           </p>
           <div className="flow-kbd-legend">
             {(["PLAY_PAUSE", "STEP_FORWARD", "STEP_BACK", "RESET", "BUY", "SELL", "FLATTEN"] as const).map((s) => (
@@ -805,6 +829,9 @@ export function FlowPage({ state }: { state: AppState }) {
       ) : null}
 
       {/* ====================== 8D SESSION REVIEW ====================== */}
+      {/* ==== 8.5 spacer so the sticky bottom dock never covers the last page content ==== */}
+      <div className="flow-dock-spacer" aria-hidden />
+
       {flow.revealed && flow.review ? (
         <ReviewPanel review={flow.review} timelineEmpty={flow.timeline.length === 0} onJump={(index) => { setPlaying(false); controller.seekFlow(index); }} />
       ) : null}
