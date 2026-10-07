@@ -1,4 +1,28 @@
 import { useEffect, useRef } from "react";
+import {
+  createChart,
+  createSeriesMarkers,
+  CandlestickSeries,
+  LineSeries,
+  AreaSeries,
+  type IChartApi,
+  type ISeriesApi,
+  type ISeriesMarkersPluginApi,
+  type Time,
+} from "lightweight-charts";
+import {
+  adaptAmaToLineData,
+  adaptCvdToSeriesData,
+  adaptFlowMarkers,
+  adaptVolumeProfile,
+  adaptVwapToLineData,
+  getAmaSeriesOptions,
+  getCandlestickSeriesOptions,
+  getCvdSeriesOptions,
+  getProfessionalChartOptions,
+  getVwapSeriesOptions,
+  toCandlestickData,
+} from "../flow/chartAdapter";
 import type { VolumeAtPrice } from "../flow/orderFlow";
 import type { FlowAnnotation, FlowAnnotationType } from "../flow/recognition";
 import { compact, price as fmtPrice } from "../util/format";
@@ -26,6 +50,8 @@ interface FlowChartProps {
   showCvd: boolean;
   showProfile: boolean;
   vwap: number | null;
+  /** When explicitly false, hides VWAP line overlay (defaults to true). */
+  showVwap?: boolean;
   /** Adaptive Moving Average overlay — one value per revealed print. */
   ama?: Array<{ t: number; value: number }> | null;
   /** Observable event markers — mapped by timestamp, never array index. */
@@ -616,52 +642,304 @@ export function drawFlowChart(
 
 /* ------------------------------- component ------------------------------- */
 
+/**
+ * Chart-side Volume Profile gutter (spec §8B.1).
+ * Displays buy/sell horizontal volume bars hugging price levels.
+ */
+export function VolumeProfileGutter({ profile }: { profile: VolumeAtPrice[] }) {
+  const data = adaptVolumeProfile(profile);
+  if (data.items.length === 0) return null;
+
+  // Render highest price at the top, descending to match the price axis
+  const sortedDesc = [...data.items].sort((a, b) => b.price - a.price);
+
+  return (
+    <aside
+      className="flow-volume-profile-gutter"
+      aria-label="Volume Profile"
+      style={{
+        width: "clamp(84px, 14%, 130px)",
+        background: "#0b0f14",
+        borderLeft: "1px solid #2a333d",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        padding: "6px 8px",
+        boxSizing: "border-box",
+        overflow: "hidden",
+        userSelect: "none",
+        fontFamily: "'IBM Plex Mono', monospace",
+        flexShrink: 0,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          fontSize: 9,
+          color: "#55606b",
+          marginBottom: 4,
+          letterSpacing: "0.05em",
+        }}
+      >
+        <span>VOL PROFILE</span>
+      </div>
+
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-around",
+          minHeight: 0,
+          gap: 1,
+        }}
+      >
+        {sortedDesc.map((item) => (
+          <div
+            key={item.price}
+            title={`${item.formattedPrice}: ${item.total} (${item.buy} buy / ${item.sell} sell)`}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              height: "max(2px, min(10px, 100% / " + Math.max(1, sortedDesc.length) + "))",
+              width: "100%",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                width: `${item.widthPct}%`,
+                height: "100%",
+                borderRadius: 1,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${item.sellPct}%`,
+                  height: "100%",
+                  background: "#e5484d",
+                }}
+              />
+              <div
+                style={{
+                  width: `${item.buyPct}%`,
+                  height: "100%",
+                  background: "#2fbf71",
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div
+        style={{
+          fontSize: 9,
+          color: "#7c8894",
+          marginTop: 4,
+          textAlign: "left",
+        }}
+      >
+        max {data.formattedMax}
+      </div>
+    </aside>
+  );
+}
+
 export function FlowChart(props: FlowChartProps) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const seriesMarkersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  const vwapSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const amaSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const cvdSeriesRef = useRef<ISeriesApi<"Area"> | null>(null);
+  const prevPointsCountRef = useRef<number>(0);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
     const wrap = wrapRef.current;
-    if (!canvas || !wrap) return;
+    if (!wrap || typeof window === "undefined") return;
 
-    const draw = () => {
-      const width = wrap.clientWidth || 800;
-      const height = wrap.clientHeight || 420;
-      const dpr = typeof window !== "undefined" && window.devicePixelRatio ? window.devicePixelRatio : 1;
-      canvas.width = Math.floor(width * dpr);
-      canvas.height = Math.floor(height * dpr);
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawFlowChart(ctx, width, height, props);
+    const width = wrap.clientWidth || 800;
+    const height = wrap.clientHeight || 420;
+
+    const chart = createChart(wrap, getProfessionalChartOptions(width, height));
+    chartRef.current = chart;
+
+    const candleSeries = chart.addSeries(CandlestickSeries, getCandlestickSeriesOptions());
+    candleSeriesRef.current = candleSeries;
+
+    const markersPlugin = createSeriesMarkers(candleSeries);
+    seriesMarkersRef.current = markersPlugin;
+
+    const vwapSeries = chart.addSeries(LineSeries, getVwapSeriesOptions());
+    vwapSeriesRef.current = vwapSeries;
+
+    const amaSeries = chart.addSeries(LineSeries, getAmaSeriesOptions());
+    amaSeriesRef.current = amaSeries;
+
+    if (props.showCvd) {
+      const cvdSeries = chart.addSeries(AreaSeries, getCvdSeriesOptions(), 1);
+      cvdSeriesRef.current = cvdSeries;
+    }
+
+    const ro =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver((entries) => {
+            const entry = entries[0];
+            if (!entry || !chartRef.current) return;
+            const { width: w, height: h } = entry.contentRect;
+            if (w > 0 && h > 0) {
+              chartRef.current.applyOptions({ width: Math.floor(w), height: Math.floor(h) });
+            }
+          })
+        : null;
+
+    ro?.observe(wrap);
+
+    return () => {
+      ro?.disconnect();
+      seriesMarkersRef.current?.detach();
+      seriesMarkersRef.current = null;
+      chart.remove();
+      chartRef.current = null;
+      candleSeriesRef.current = null;
+      vwapSeriesRef.current = null;
+      amaSeriesRef.current = null;
+      cvdSeriesRef.current = null;
     };
+  }, []);
 
-    draw();
-    const onResize = () => draw();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+  useEffect(() => {
+    const candleSeries = candleSeriesRef.current;
+    const vwapSeries = vwapSeriesRef.current;
+    const amaSeries = amaSeriesRef.current;
+    const chart = chartRef.current;
+    const wrap = wrapRef.current;
+    if (!candleSeries || !vwapSeries || !amaSeries || !chart || !wrap) return;
+
+    if (props.priceSeries.length === 0) {
+      candleSeries.setData([]);
+      vwapSeries.setData([]);
+      amaSeries.setData([]);
+      if (cvdSeriesRef.current) cvdSeriesRef.current.setData([]);
+      seriesMarkersRef.current?.setMarkers([]);
+      prevPointsCountRef.current = 0;
+      return;
+    }
+
+    const t0 = props.priceSeries[0].t;
+    const tEnd = props.priceSeries[props.priceSeries.length - 1].t;
+    const span = Math.max(1, tEnd - t0);
+    const plotW = wrap.clientWidth || 800;
+    const target = Math.max(30, Math.min(90, Math.floor(plotW / 11)));
+    const effectiveTarget = props.coarseContext ? Math.max(8, Math.round(target / 3)) : target;
+    const bucketMs = pickBucketMs(span, effectiveTarget);
+    const rawCandles = buildCandles(props.priceSeries, bucketMs);
+    const adaptedCandles = toCandlestickData(rawCandles);
+
+    candleSeries.setData(adaptedCandles);
+    const vwapData =
+      props.showVwap === false ? [] : adaptVwapToLineData(props.vwap, adaptedCandles);
+    vwapSeries.setData(vwapData);
+    amaSeries.setData(adaptAmaToLineData(props.ama, adaptedCandles, bucketMs, rawCandles));
+
+    // Synchronize event and trade markers
+    const adaptedMarkers = adaptFlowMarkers({
+      annotations: props.annotations,
+      showAnnotations: props.showAnnotations,
+      trades: props.trades,
+      showTradeMarkers: props.showTradeMarkers,
+      priceSeries: props.priceSeries,
+      candles: adaptedCandles,
+      rawCandles,
+      bucketMs,
+      isBlind: props.trades === null,
+    });
+    seriesMarkersRef.current?.setMarkers(adaptedMarkers);
+
+    // CVD lower pane management
+    if (props.showCvd) {
+      if (!cvdSeriesRef.current) {
+        cvdSeriesRef.current = chart.addSeries(AreaSeries, getCvdSeriesOptions(), 1);
+      }
+      cvdSeriesRef.current.setData(
+        adaptCvdToSeriesData(props.cvdSeries, adaptedCandles, {
+          tradeCount: props.tradeCount,
+          rawCandles,
+        }),
+      );
+    } else if (cvdSeriesRef.current) {
+      chart.removeSeries(cvdSeriesRef.current);
+      cvdSeriesRef.current = null;
+    }
+
+    if (prevPointsCountRef.current === 0 && adaptedCandles.length > 0) {
+      chart.timeScale().fitContent();
+    }
+    prevPointsCountRef.current = props.priceSeries.length;
   }, [
     props.priceSeries,
+    props.coarseContext,
+    props.vwap,
+    props.showVwap,
+    props.ama,
+    props.showCvd,
     props.cvdSeries,
     props.tradeCount,
-    props.profile,
-    props.showCvd,
-    props.showProfile,
-    props.vwap,
-    props.ama,
     props.annotations,
     props.showAnnotations,
     props.trades,
     props.showTradeMarkers,
-    props.coarseContext,
   ]);
 
   return (
-    <div ref={wrapRef} style={{ width: "100%", height: "100%", minHeight: 320 }}>
-      <canvas ref={canvasRef} />
+    <div
+      className="flow-professional-chart-wrapper"
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        width: "100%",
+        height: "100%",
+        minHeight: 320,
+        background: "#0a0d10",
+        position: "relative",
+      }}
+    >
+      <div
+        ref={wrapRef}
+        className="flow-professional-chart"
+        style={{
+          flex: 1,
+          minWidth: 0,
+          height: "100%",
+          position: "relative",
+        }}
+      >
+        {props.priceSeries.length === 0 && (
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: 16,
+              transform: "translateY(-50%)",
+              color: "#55606b",
+              fontFamily: "'IBM Plex Mono', monospace",
+              fontSize: 12,
+              pointerEvents: "none",
+            }}
+          >
+            Generate a scenario, then step or play to reveal the tape.
+          </div>
+        )}
+      </div>
+
+      {props.showProfile && props.profile.length > 0 && (
+        <VolumeProfileGutter profile={props.profile} />
+      )}
     </div>
   );
 }

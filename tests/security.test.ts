@@ -30,7 +30,7 @@ function walk(dir: string): string[] {
 }
 
 const files = walk(SRC).filter((f) => /\.(ts|tsx|css|html)$/.test(f));
-const sources = files.map((f) => ({ path: f.slice(SRC.length + 1), text: readFileSync(f, "utf8") }));
+const sources = files.map((f) => ({ path: f.slice(SRC.length + 1).replace(/\\/g, "/"), text: readFileSync(f, "utf8") }));
 
 describe("no server surface, no network calls", () => {
   test("the client never performs a network request", () => {

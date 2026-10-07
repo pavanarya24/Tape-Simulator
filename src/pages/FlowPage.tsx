@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppState } from "../state/app";
 import { controller } from "../state/useApp";
 import { FlowChart, type FlowChartTrade } from "../components/FlowChart";
+import { FlowChartToolbar } from "../components/FlowChartToolbar";
+import { useChartFullscreen } from "../flow/chartFullscreen";
 import { FLOW_DIFFICULTIES, FLOW_SCENARIOS, scenarioName, type FlowDifficulty, type FlowScenarioId } from "../flow/scenarios";
 import { flowEvidenceLabel } from "../flow/recognition";
 import type { FlowBias, FlowPrediction } from "../flow/execution";
@@ -85,6 +87,7 @@ function tapeTime(t: number): string {
 export function FlowPage({ state }: { state: AppState }) {
   const flow = state.flow;
   const [pattern, setPattern] = useState<FlowScenarioId | "any">("any");
+  const [showVwap, setShowVwap] = useState(true);
   const [showCvd, setShowCvd] = useState(true);
   const [showProfile, setShowProfile] = useState(true);
   const [showMarkers, setShowMarkers] = useState(true);
@@ -92,6 +95,8 @@ export function FlowPage({ state }: { state: AppState }) {
   const [showTradeMarkers, setShowTradeMarkers] = useState(true);
   const [tapeFilter, setTapeFilter] = useState<TapeFilter>("ALL");
   const [playing, setPlaying] = useState(false);
+  const chartCardRef = useRef<HTMLDivElement | null>(null);
+  const { isFullscreen, toggleFullscreen } = useChartFullscreen(chartCardRef);
   /* Phase 8.5 — pure presentation state: compact vs expanded market workspace.
      Never touches replay, execution, scoring, blind gating or analytics. */
   const [workspaceMode, setWorkspaceMode] = useState<FlowWorkspaceMode>(DEFAULT_WORKSPACE_MODE);
@@ -287,45 +292,32 @@ export function FlowPage({ state }: { state: AppState }) {
 
       {/* ================== 8.5 MARKET WORKSPACE (sticky) ================== */}
       <section className={flowWorkspaceClass(workspaceMode)} aria-label="Market workspace">
-      <div className="card flow-workspace-chart">
+      <div
+        ref={chartCardRef}
+        className={`card flow-workspace-chart ${isFullscreen ? "flow-chart-pseudo-fullscreen" : ""}`}
+      >
         <div className="card-head">
           <h3>Price / Flow chart</h3>
-          <div className="right chips">
-            <button
-              className="chip"
-              onClick={() => setWorkspaceMode(toggleWorkspaceMode(workspaceMode))}
-              title="Compact / expanded market workspace — presentation only, never affects replay, execution or scoring"
-            >
-              {workspaceMode === "compact" ? "EXPAND ⤢" : "COMPACT ⤡"}
-            </button>
-            <button className={`chip ${showCvd ? "on" : ""}`} onClick={() => setShowCvd((v) => !v)} title="Cumulative volume delta pane">
-              CVD
-            </button>
-            <button className={`chip ${showProfile ? "on" : ""}`} onClick={() => setShowProfile((v) => !v)} title="Volume-at-price profile gutter">
-              Profile
-            </button>
-            <button
-              className={`chip ${showMarkers ? "on" : ""}`}
-              onClick={() => setShowMarkers((v) => !v)}
-              title="Objective evidence markers — observable only, never a pattern call"
-            >
-              Evidence
-            </button>
-            <button className={`chip ${showAma ? "on" : ""}`} onClick={() => setShowAma((v) => !v)} title="Adaptive Moving Average">
-              AMA
-            </button>
-            <button
-              className={`chip ${showTradeMarkers && flow.policy.tradeMarkers ? "on" : ""}`}
-              onClick={() => setShowTradeMarkers((v) => !v)}
-              disabled={!flow.policy.tradeMarkers}
-              title={flow.policy.tradeMarkers ? "Entry/exit markers (review)" : "Entry/exit markers unlock after Reveal"}
-            >
-              Trades
-            </button>
-            <span className="badge mono" title="Current Adaptive Moving Average">
-              AMA {flow.ama !== null ? fmtPrice(flow.ama) : "—"}
-            </span>
-          </div>
+          <FlowChartToolbar
+            showVwap={showVwap}
+            onToggleVwap={() => setShowVwap((v) => !v)}
+            showAma={showAma}
+            onToggleAma={() => setShowAma((v) => !v)}
+            showCvd={showCvd}
+            onToggleCvd={() => setShowCvd((v) => !v)}
+            showProfile={showProfile}
+            onToggleProfile={() => setShowProfile((v) => !v)}
+            showAnnotations={showMarkers}
+            onToggleAnnotations={() => setShowMarkers((v) => !v)}
+            showTradeMarkers={showTradeMarkers}
+            onToggleTradeMarkers={() => setShowTradeMarkers((v) => !v)}
+            tradeMarkersAllowed={Boolean(flow.policy.tradeMarkers)}
+            isFullscreen={isFullscreen}
+            onToggleFullscreen={toggleFullscreen}
+            currentAma={flow.ama}
+            workspaceMode={workspaceMode}
+            onToggleWorkspaceMode={() => setWorkspaceMode(toggleWorkspaceMode(workspaceMode))}
+          />
         </div>
         <div className="flow-workspace-canvas">
           <FlowChart
@@ -336,6 +328,7 @@ export function FlowPage({ state }: { state: AppState }) {
             showCvd={showCvd}
             showProfile={showProfile}
             vwap={of && of.vwap > 0 ? of.vwap : null}
+            showVwap={showVwap}
             ama={showAma ? flow.amaSeries : null}
             annotations={flow.annotations}
             showAnnotations={showMarkers}
