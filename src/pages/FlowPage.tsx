@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { AppState } from "../state/app";
 import { controller } from "../state/useApp";
 import { FlowChart, type FlowChartTrade } from "../components/FlowChart";
@@ -105,11 +105,15 @@ export function FlowPage({ state }: { state: AppState }) {
          never the order of the single event clock (spec §8A.1) ---- */
   useEffect(() => {
     if (!playing) return;
+    controller.startFlowPlayback();
     const batch = playbackBatch(flow.speed);
     const id = setInterval(() => {
-      if (!controller.stepFlow(batch.eventsPerTick)) setPlaying(false);
+      if (!controller.stepFlow(batch.eventsPerTick, { continuous: true })) setPlaying(false);
     }, batch.intervalMs);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      controller.stopFlowPlayback();
+    };
   }, [playing, flow.speed]);
 
   useEffect(() => {
@@ -911,7 +915,7 @@ export function FlowPage({ state }: { state: AppState }) {
 
 /* ============================ sub-components ============================ */
 
-function TapeRowView({ row }: { row: TapeRow }) {
+const TapeRowView = memo(function TapeRowView({ row }: { row: TapeRow }) {
   const cls = row.sweepLike ? "sweep" : row.large ? "large" : row.burst ? "burst" : "";
   const sideCls = row.aggressorSide === "BUY" ? "up" : row.aggressorSide === "SELL" ? "down" : "dim";
   return (
@@ -926,9 +930,9 @@ function TapeRowView({ row }: { row: TapeRow }) {
       <td className={`r ${sideCls}`}>{row.aggressorSide}</td>
     </tr>
   );
-}
+});
 
-function DOMSide({
+const DOMSide = memo(function DOMSide({
   levels,
   side,
   maxSize,
@@ -957,9 +961,9 @@ function DOMSide({
       })}
     </div>
   );
-}
+});
 
-function AnalyticsDashboard({ analytics }: { analytics: FlowAnalytics }) {
+const AnalyticsDashboard = memo(function AnalyticsDashboard({ analytics }: { analytics: FlowAnalytics }) {
   const { thresholds } = analytics;
   return (
     <div className="card">
@@ -1092,9 +1096,9 @@ function AnalyticsDashboard({ analytics }: { analytics: FlowAnalytics }) {
       </div>
     </div>
   );
-}
+});
 
-function ReviewPanel({
+const ReviewPanel = memo(function ReviewPanel({
   review,
   timelineEmpty,
   onJump,
@@ -1183,4 +1187,4 @@ function ReviewPanel({
       </div>
     </div>
   );
-}
+});
