@@ -1,0 +1,19 @@
+{
+  "source": "Binance Vision Official Historical Spot Archive (https://data.binance.vision/data/spot/daily/aggTrades/BTCUSDT/BTCUSDT-aggTrades-2024-05-01.zip)",
+  "market": "spot",
+  "symbol": "BTCUSDT",
+  "date": "2024-05-01",
+  "format": "csv",
+  "columns": [
+    "agg_trade_id",
+    "price",
+    "quantity",
+    "first_trade_id",
+    "last_trade_id",
+    "transact_time",
+    "is_buyer_maker",
+    "is_best_match"
+  ],
+  "recordsInSlice": 500,
+  "totalRecordsInFullFile": 1852572
+}
