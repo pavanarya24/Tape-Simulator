@@ -237,7 +237,7 @@ describe("Phase 9-A Normalized Microstructure Event Model", () => {
   });
 
   // 10. Deterministic ordering
-  test("10. deterministic ordering resolves sub-second bursts by nanoseconds, sequence, and event priority", () => {
+  test("10. deterministic ordering resolves sub-second bursts by nanoseconds and sequence", () => {
     // Four events occurring within the exact same millisecond timestamp
     const tSame = baseTs + 500;
     const ev1: DepthDeltaEvent = {
@@ -378,5 +378,161 @@ describe("Phase 9-A Normalized Microstructure Event Model", () => {
     expect(validateNormalizedEvent({ kind: "trade", timestamp: 100, sequence: 1, price: 100, size: 5, aggressorSide: "INVALID" }).valid).toBe(false);
     expect(validateNormalizedEvent({ kind: "depth-delta", timestamp: 100, sequence: 1, side: "invalid", action: "add", price: 100, size: 5 }).valid).toBe(false);
     expect(validateNormalizedEvent({ kind: "unknown-kind", timestamp: 100, sequence: 1 }).valid).toBe(false);
+  });
+
+  // 15. Timestamp collision Case 1: same tsEventNanos, different sequence
+  test("15. timestamp collision Case 1: same tsEventNanos with different sequence sorts lower sequence first", () => {
+    const tSameNano = 1710514200500123456n;
+    const tradeEarlierSeq: TradeEvent = {
+      kind: "trade",
+      timestamp: baseTs,
+      sequence: 10,
+      price: 100,
+      size: 5,
+      aggressorSide: "BUY",
+      tsEventNanos: tSameNano,
+    };
+    const depthLaterSeq: DepthDeltaEvent = {
+      kind: "depth-delta",
+      timestamp: baseTs,
+      sequence: 20,
+      side: "bid",
+      action: "add",
+      price: 99.75,
+      size: 10,
+      tsEventNanos: tSameNano,
+    };
+
+    expect(compareNormalizedEvents(tradeEarlierSeq, depthLaterSeq)).toBeLessThan(0);
+    expect(compareNormalizedEvents(depthLaterSeq, tradeEarlierSeq)).toBeGreaterThan(0);
+
+    const list = [depthLaterSeq, tradeEarlierSeq];
+    list.sort(compareNormalizedEvents);
+    expect(list[0]).toBe(tradeEarlierSeq);
+    expect(list[1]).toBe(depthLaterSeq);
+  });
+
+  // 16. Timestamp collision Case 2: same tsEventNanos and same sequence returns 0 and preserves stable wire order
+  test("16. timestamp collision Case 2: same tsEventNanos and same sequence returns 0 and preserves stable order across different kinds", () => {
+    const tSameNano = 1710514200500123456n;
+    const trade: TradeEvent = {
+      kind: "trade",
+      timestamp: baseTs,
+      sequence: 42,
+      price: 100,
+      size: 5,
+      aggressorSide: "BUY",
+      tsEventNanos: tSameNano,
+    };
+    const depthDelta: DepthDeltaEvent = {
+      kind: "depth-delta",
+      timestamp: baseTs,
+      sequence: 42,
+      side: "bid",
+      action: "add",
+      price: 99.75,
+      size: 10,
+      tsEventNanos: tSameNano,
+    };
+
+    // Strict equality comparison returns 0 in both directions
+    expect(compareNormalizedEvents(trade, depthDelta)).toBe(0);
+    expect(compareNormalizedEvents(depthDelta, trade)).toBe(0);
+
+    // Stable sort preserves [trade, depthDelta] when trade was first
+    const order1 = [trade, depthDelta];
+    order1.sort(compareNormalizedEvents);
+    expect(order1[0]).toBe(trade);
+    expect(order1[1]).toBe(depthDelta);
+
+    // Stable sort preserves [depthDelta, trade] when depthDelta was first
+    // This proves event kind is NOT used as a tie-breaker
+    const order2 = [depthDelta, trade];
+    order2.sort(compareNormalizedEvents);
+    expect(order2[0]).toBe(depthDelta);
+    expect(order2[1]).toBe(trade);
+  });
+
+  // 17. Deserialization error handling rejects malformed JSON
+  test("17. deserialization rejects malformed JSON with an Error", () => {
+    expect(() => deserializeNormalizedEvent("not a json string { [")).toThrow();
+    expect(() => deserializeNormalizedEvent("")).toThrow();
+    expect(() => deserializeNormalizedEvent("{ kind: 'trade' ")).toThrow();
+  });
+
+  // 18. Deserialization error handling rejects valid JSON with invalid event shape
+  test("18. deserialization rejects valid JSON with invalid event shape", () => {
+    // Negative timestamp
+    expect(() =>
+      deserializeNormalizedEvent(
+        JSON.stringify({ kind: "trade", timestamp: -1, sequence: 1, price: 100, size: 1, aggressorSide: "BUY" }),
+      ),
+    ).toThrow(/Deserialization validation failed/);
+
+    // Non-integer sequence
+    expect(() =>
+      deserializeNormalizedEvent(
+        JSON.stringify({ kind: "trade", timestamp: 1000, sequence: 1.5, price: 100, size: 1, aggressorSide: "BUY" }),
+      ),
+    ).toThrow(/Deserialization validation failed/);
+
+    // Non-positive trade size
+    expect(() =>
+      deserializeNormalizedEvent(
+        JSON.stringify({ kind: "trade", timestamp: 1000, sequence: 1, price: 100, size: 0, aggressorSide: "BUY" }),
+      ),
+    ).toThrow(/Deserialization validation failed/);
+
+    // Invalid trade aggressorSide
+    expect(() =>
+      deserializeNormalizedEvent(
+        JSON.stringify({ kind: "trade", timestamp: 1000, sequence: 1, price: 100, size: 1, aggressorSide: "MIDDLE" }),
+      ),
+    ).toThrow(/Deserialization validation failed/);
+  });
+
+  // 19. Deserialization error handling rejects events with missing required fields
+  test("19. deserialization rejects events with missing required fields", () => {
+    // Missing timestamp & sequence
+    expect(() =>
+      deserializeNormalizedEvent(JSON.stringify({ kind: "trade", price: 100, size: 1, aggressorSide: "BUY" })),
+    ).toThrow(/Deserialization validation failed/);
+
+    // Missing trade price and size
+    expect(() =>
+      deserializeNormalizedEvent(JSON.stringify({ kind: "trade", timestamp: 1000, sequence: 1 })),
+    ).toThrow(/Deserialization validation failed/);
+
+    // Missing quote prices
+    expect(() =>
+      deserializeNormalizedEvent(JSON.stringify({ kind: "quote", timestamp: 1000, sequence: 1 })),
+    ).toThrow(/Deserialization validation failed/);
+
+    // Missing depth-delta side and action
+    expect(() =>
+      deserializeNormalizedEvent(JSON.stringify({ kind: "depth-delta", timestamp: 1000, sequence: 1, price: 100, size: 5 })),
+    ).toThrow(/Deserialization validation failed/);
+  });
+
+  // 20. Deserialization error handling rejects invalid or unknown event kind
+  test("20. deserialization rejects invalid or unknown event kind", () => {
+    // Missing kind discriminator
+    expect(() =>
+      deserializeNormalizedEvent(JSON.stringify({ timestamp: 1000, sequence: 1 })),
+    ).toThrow(/Missing or invalid 'kind' discriminator/);
+
+    // Completely unknown kind
+    expect(() =>
+      deserializeNormalizedEvent(JSON.stringify({ kind: "order-status", timestamp: 1000, sequence: 1 })),
+    ).toThrow(/Unknown event kind: order-status/);
+
+    // Non-object JSON value
+    expect(() =>
+      deserializeNormalizedEvent(JSON.stringify("just a string")),
+    ).toThrow(/Event must be a non-null object/);
+
+    expect(() =>
+      deserializeNormalizedEvent(JSON.stringify(42)),
+    ).toThrow(/Event must be a non-null object/);
   });
 });

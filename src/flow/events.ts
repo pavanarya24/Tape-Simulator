@@ -162,10 +162,10 @@ export function toEventNanos(ev: { timestamp: number; tsEventNanos?: bigint | st
 }
 
 /**
- * Deterministic total ordering comparator for normalized market events:
+ * Canonical ordering comparator for normalized market events:
  * 1. Nanosecond event timestamp (exchange/matching engine time)
  * 2. Event sequence number
- * 3. Tie-breaker by event kind priority (book-reset -> depth-delta -> l2 -> quote -> trade)
+ * 3. Returns 0 when both are equal (allowing caller's stable sort / wire order to preserve source ordering)
  */
 export function compareNormalizedEvents(
   a: NormalizedMarketEvent,
@@ -180,16 +180,7 @@ export function compareNormalizedEvents(
     return a.sequence - b.sequence;
   }
 
-  const priority = (kind: NormalizedMarketEvent["kind"]): number => {
-    switch (kind) {
-      case "book-reset": return 0;
-      case "depth-delta": return 1;
-      case "l2": return 2;
-      case "quote": return 3;
-      case "trade": return 4;
-    }
-  };
-  return priority(a.kind) - priority(b.kind);
+  return 0;
 }
 
 /**
