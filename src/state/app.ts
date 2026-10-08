@@ -7,7 +7,7 @@
  * ExecutionSimulator remain completely unaware of the UI.
  */
 
-import type { Bar, RootSymbol } from "../market/types";
+import type { Bar, ContractSpec, RootSymbol } from "../market/types";
 import { CONTRACTS } from "../market/instruments";
 import type { SessionBars, SessionMeta, SessionType } from "../data/types";
 import { barAt, sliceBarSeries } from "../data/types";
@@ -71,6 +71,7 @@ import type {
   FlowRecognition,
   FlowTimelineEntry,
 } from "../flow/recognition";
+import type { MarketDataFeed } from "../flow/feed";
 import { FlowTrainingSession, type FlowNotice } from "../flow/session";
 import { SnapshotPublicationScheduler, type SchedulerMetrics } from "../flow/scheduler";
 import {
@@ -1065,6 +1066,28 @@ export class TapeLabController {
     // carries over to a scenario the trader has not seen yet.
     if (this.flowReplayMode === "REVIEW") this.flowReplayMode = "LIVE";
     this.flowSession.warmup(FLOW_WARMUP);
+    this.flowScheduler.reset();
+    this.flowScheduler.flush();
+  }
+
+  /**
+   * Load an external real market data feed (e.g. from Databento CME or generic adapter).
+   * Operates safely without synthetic ScenarioTruth, preserving honest isRealData reporting.
+   */
+  loadRealFlowFeed(feed: MarketDataFeed, contract: ContractSpec = CONTRACTS.NQ): void {
+    this.flowScenarioSeq++;
+    this.flowSession = new FlowTrainingSession(feed, null, {
+      sessionId: `real-${this.flowScenarioSeq}`,
+      costs: this.flowCosts,
+      risk: this.flowRisk,
+      contract,
+      difficulty: this.flowDifficulty,
+    });
+    this.flowTruth = null;
+    this.flowRevealed = false;
+    this.flowHeld = false;
+    if (this.flowReplayMode === "REVIEW") this.flowReplayMode = "LIVE";
+    this.flowSession.warmup(Math.min(FLOW_WARMUP, feed.totalEvents()));
     this.flowScheduler.reset();
     this.flowScheduler.flush();
   }

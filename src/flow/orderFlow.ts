@@ -10,7 +10,7 @@
  * spread / microprice / imbalance context.
  */
 
-import type { Aggressor, L2Event, MarketEvent, TradeEvent } from "./events";
+import type { Aggressor, L2Event, MarketEvent, QuoteEvent, TradeEvent } from "./events";
 
 export interface VolumeAtPrice {
   price: number;
@@ -198,6 +198,14 @@ export class OrderFlowEngine {
   processEvent(ev: MarketEvent): void {
     if (ev.kind === "trade") this.onTrade(ev);
     else if (ev.kind === "l2") this.onL2(ev);
+    else if (ev.kind === "quote") this.onQuote(ev);
+  }
+
+  private onQuote(ev: QuoteEvent): void {
+    this.bestBid = ev.bid;
+    this.bestAsk = ev.ask;
+    this.bidLiquidity = ev.bidSize;
+    this.askLiquidity = ev.askSize;
   }
 
   private onTrade(t: TradeEvent): void {
