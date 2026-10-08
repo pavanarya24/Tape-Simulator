@@ -65,6 +65,32 @@ export const LARGEST_KEEP = 6;
 export const CVD_SERIES_KEEP = 600;
 export const VELOCITY_WINDOW_MS = 60_000;
 
+/**
+ * Complete internal state of OrderFlowEngine required for deterministic checkpoint restoration.
+ * All collections are detached, immutable copies safe from live engine mutation.
+ */
+export interface OrderFlowState {
+  tape: readonly TradeEvent[];
+  totalBuy: number;
+  totalSell: number;
+  buyCount: number;
+  sellCount: number;
+  unknownCount: number;
+  cvd: number;
+  cvdSeries: readonly number[];
+  vwapNumerator: number;
+  vwapDenominator: number;
+  lastPrice: number;
+  lastSequence: number;
+  volumeByPrice: Array<[number, { buy: number; sell: number }]>;
+  largest: readonly TradeEvent[];
+  tradeTimestamps: readonly number[];
+  bestBid: number | null;
+  bestAsk: number | null;
+  bidLiquidity: number | null;
+  askLiquidity: number | null;
+}
+
 export class OrderFlowEngine {
   private tape: TradeEvent[] = [];
   private totalBuy = 0;
@@ -106,6 +132,66 @@ export class OrderFlowEngine {
     this.bestAsk = null;
     this.bidLiquidity = null;
     this.askLiquidity = null;
+  }
+
+  /**
+   * Capture an immutable, detached checkpoint of internal engine state.
+   * Deep-clones volumeByPrice buckets and clones all mutable ring buffers.
+   */
+  captureState(): OrderFlowState {
+    const volumeByPrice: Array<[number, { buy: number; sell: number }]> = [];
+    for (const [p, v] of this.volumeByPrice.entries()) {
+      volumeByPrice.push([p, { buy: v.buy, sell: v.sell }]);
+    }
+    return {
+      tape: [...this.tape],
+      totalBuy: this.totalBuy,
+      totalSell: this.totalSell,
+      buyCount: this.buyCount,
+      sellCount: this.sellCount,
+      unknownCount: this.unknownCount,
+      cvd: this.cvd,
+      cvdSeries: [...this.cvdSeries],
+      vwapNumerator: this.vwapNumerator,
+      vwapDenominator: this.vwapDenominator,
+      lastPrice: this.lastPrice,
+      lastSequence: this.lastSequence,
+      volumeByPrice,
+      largest: [...this.largest],
+      tradeTimestamps: [...this.tradeTimestamps],
+      bestBid: this.bestBid,
+      bestAsk: this.bestAsk,
+      bidLiquidity: this.bidLiquidity,
+      askLiquidity: this.askLiquidity,
+    };
+  }
+
+  /**
+   * Restore engine state from a captured checkpoint.
+   * Clones collections so subsequent processing does not mutate the checkpoint.
+   */
+  restoreState(state: OrderFlowState): void {
+    this.tape = [...state.tape];
+    this.totalBuy = state.totalBuy;
+    this.totalSell = state.totalSell;
+    this.buyCount = state.buyCount;
+    this.sellCount = state.sellCount;
+    this.unknownCount = state.unknownCount;
+    this.cvd = state.cvd;
+    this.cvdSeries = [...state.cvdSeries];
+    this.vwapNumerator = state.vwapNumerator;
+    this.vwapDenominator = state.vwapDenominator;
+    this.lastPrice = state.lastPrice;
+    this.lastSequence = state.lastSequence;
+    this.volumeByPrice = new Map(
+      state.volumeByPrice.map(([p, v]) => [p, { buy: v.buy, sell: v.sell }]),
+    );
+    this.largest = [...state.largest];
+    this.tradeTimestamps = [...state.tradeTimestamps];
+    this.bestBid = state.bestBid;
+    this.bestAsk = state.bestAsk;
+    this.bidLiquidity = state.bidLiquidity;
+    this.askLiquidity = state.askLiquidity;
   }
 
   /** Consume one event. Unknown kinds are ignored (forward compatibility). */

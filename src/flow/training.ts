@@ -21,12 +21,33 @@
 
 import type { Level, MarketEvent } from "./events";
 import type { MarketDataFeed } from "./feed";
-import { DOMEngine, type DOMSnapshot } from "./dom";
-import { OrderFlowEngine, type OrderFlowSnapshot } from "./orderFlow";
+import { DOMEngine, type DOMSnapshot, type DOMState } from "./dom";
+import { OrderFlowEngine, type OrderFlowSnapshot, type OrderFlowState } from "./orderFlow";
 import type { ScenarioTruth } from "./scenarios";
 
 /** Price points kept for the chart (decimated in place when exceeded). */
 export const PRICE_SERIES_KEEP = 1200;
+
+/**
+ * Immutable detached checkpoint capturing all state required for deterministic replay restoration.
+ * Strictly decoupled from secret ScenarioTruth (blind-mode safe).
+ */
+export interface FlowEngineCheckpoint {
+  /** Events consumed so far up to this checkpoint. */
+  readonly eventIndex: number;
+  /** Sequence number of the newest event consumed (0 if none). */
+  readonly sequence: number;
+  /** Timestamp of the newest event consumed (null if none). */
+  readonly timestamp: number | null;
+  /** Sequence position of the feed's next unread event. */
+  readonly feedPosition: number;
+  /** Complete OrderFlowEngine internal state. */
+  readonly orderFlow: OrderFlowState;
+  /** Complete DOMEngine internal state. */
+  readonly dom: DOMState;
+  /** Traded-price path (bounded/decimated), cloned. */
+  readonly priceSeries: readonly { t: number; price: number; sequence: number }[];
+}
 
 export interface TrainingSnapshot {
   /** Feed label — synthetic data must always identify itself. */
@@ -114,6 +135,45 @@ export class TrainingEngine {
 
   reset(): void {
     this.seekTo(0);
+  }
+
+  /**
+   * Capture an immutable, detached checkpoint of the entire engine state.
+   * Completely isolated from ScenarioTruth (blind-mode safe).
+   */
+  captureCheckpoint(): FlowEngineCheckpoint {
+    return {
+      eventIndex: this.consumed,
+      sequence: this.lastSequence,
+      timestamp: this.lastTimestamp,
+      feedPosition: this.feed.position(),
+      orderFlow: this.of.captureState(),
+      dom: this.dom.captureState(),
+      priceSeries: this.priceSeries.map((p) => ({ t: p.t, price: p.price, sequence: p.sequence })),
+    };
+  }
+
+  /**
+   * Restore all engines and replay cursors from an immutable checkpoint.
+   * Does NOT alter ScenarioTruth.
+   */
+  restoreCheckpoint(checkpoint: FlowEngineCheckpoint): void {
+    this.consumed = checkpoint.eventIndex;
+    this.lastSequence = checkpoint.sequence;
+    this.lastTimestamp = checkpoint.timestamp;
+
+    if (checkpoint.eventIndex === 0) {
+      this.feed.reset();
+    } else if (checkpoint.feedPosition <= this.feed.totalEvents()) {
+      this.feed.seek(checkpoint.feedPosition);
+    } else {
+      this.feed.seek(this.feed.totalEvents());
+      this.feed.nextEvent();
+    }
+
+    this.of.restoreState(checkpoint.orderFlow);
+    this.dom.restoreState(checkpoint.dom);
+    this.priceSeries = checkpoint.priceSeries.map((p) => ({ t: p.t, price: p.price, sequence: p.sequence }));
   }
 
   private apply(ev: MarketEvent): void {
