@@ -67,11 +67,38 @@ export interface DOMSnapshot {
   sequence: number;
 }
 
-interface PullMarker {
+export interface DOMPullMarker {
   side: "bid" | "ask";
   price: number;
   preSize: number;
   eventsLeft: number;
+}
+
+type PullMarker = DOMPullMarker;
+
+export interface DOMState {
+  bids: readonly Level[];
+  asks: readonly Level[];
+  hasBook: boolean;
+  sequence: number;
+  stackBidLevels: number;
+  stackAskLevels: number;
+  pullBidCount: number;
+  pullAskCount: number;
+  replenishCount: number;
+  depletedBid: boolean;
+  depletedAsk: boolean;
+  sweepBuyCount: number;
+  sweepSellCount: number;
+  topOfBookChanges: number;
+  prevBestBid: number | null;
+  prevBestAsk: number | null;
+  prevBidTopSize: number;
+  prevAskTopSize: number;
+  pullMarkers: readonly DOMPullMarker[];
+  bidHistoryTotals: readonly number[];
+  askHistoryTotals: readonly number[];
+  log: readonly DOMEventLogEntry[];
 }
 
 interface LiquidityHistory {
@@ -131,6 +158,76 @@ export class DOMEngine {
     this.bidHistory = { totals: [] };
     this.askHistory = { totals: [] };
     this.log = [];
+  }
+
+  /**
+   * Capture an immutable, detached checkpoint of internal DOM engine state.
+   * Deep-clones bids, asks, pullMarkers (which mutate in place), and liquidity ring buffers.
+   */
+  captureState(): DOMState {
+    return {
+      bids: this.bids.map((l) => ({ price: l.price, size: l.size, orderCount: l.orderCount })),
+      asks: this.asks.map((l) => ({ price: l.price, size: l.size, orderCount: l.orderCount })),
+      hasBook: this.hasBook,
+      sequence: this.sequence,
+      stackBidLevels: this.stackBidLevels,
+      stackAskLevels: this.stackAskLevels,
+      pullBidCount: this.pullBidCount,
+      pullAskCount: this.pullAskCount,
+      replenishCount: this.replenishCount,
+      depletedBid: this.depletedBid,
+      depletedAsk: this.depletedAsk,
+      sweepBuyCount: this.sweepBuyCount,
+      sweepSellCount: this.sweepSellCount,
+      topOfBookChanges: this.topOfBookChanges,
+      prevBestBid: this.prevBestBid,
+      prevBestAsk: this.prevBestAsk,
+      prevBidTopSize: this.prevBidTopSize,
+      prevAskTopSize: this.prevAskTopSize,
+      pullMarkers: this.pullMarkers.map((m) => ({
+        side: m.side,
+        price: m.price,
+        preSize: m.preSize,
+        eventsLeft: m.eventsLeft,
+      })),
+      bidHistoryTotals: [...this.bidHistory.totals],
+      askHistoryTotals: [...this.askHistory.totals],
+      log: [...this.log],
+    };
+  }
+
+  /**
+   * Restore DOM engine state from a captured checkpoint.
+   * Clones collections so subsequent processing does not mutate the checkpoint.
+   */
+  restoreState(state: DOMState): void {
+    this.bids = state.bids.map((l) => ({ price: l.price, size: l.size, orderCount: l.orderCount }));
+    this.asks = state.asks.map((l) => ({ price: l.price, size: l.size, orderCount: l.orderCount }));
+    this.hasBook = state.hasBook;
+    this.sequence = state.sequence;
+    this.stackBidLevels = state.stackBidLevels;
+    this.stackAskLevels = state.stackAskLevels;
+    this.pullBidCount = state.pullBidCount;
+    this.pullAskCount = state.pullAskCount;
+    this.replenishCount = state.replenishCount;
+    this.depletedBid = state.depletedBid;
+    this.depletedAsk = state.depletedAsk;
+    this.sweepBuyCount = state.sweepBuyCount;
+    this.sweepSellCount = state.sweepSellCount;
+    this.topOfBookChanges = state.topOfBookChanges;
+    this.prevBestBid = state.prevBestBid;
+    this.prevBestAsk = state.prevBestAsk;
+    this.prevBidTopSize = state.prevBidTopSize;
+    this.prevAskTopSize = state.prevAskTopSize;
+    this.pullMarkers = state.pullMarkers.map((m) => ({
+      side: m.side,
+      price: m.price,
+      preSize: m.preSize,
+      eventsLeft: m.eventsLeft,
+    }));
+    this.bidHistory = { totals: [...state.bidHistoryTotals] };
+    this.askHistory = { totals: [...state.askHistoryTotals] };
+    this.log = [...state.log];
   }
 
   /** Feed one event. L2 rebuilds the book; trades drive sweep detection. */
