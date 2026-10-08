@@ -7,7 +7,7 @@ Phase 9-C implements end-to-end, vendor-neutral ingestion of real market microst
 REAL DATA SOURCE (JSON / JSONL / CSV / Stream)
                     ↓
         VENDOR ADAPTER / PARSER
- (e.g. DatabentoAdapter, GenericMicrostructureAdapter)
+ (e.g. DatabentoAdapter, BinanceAdapter, GenericMicrostructureAdapter)
                     ↓
     VENDOR-NEUTRAL INGESTION CONTRACT
    (MicrostructureCapabilities, IngestionValidationReport)
@@ -43,6 +43,18 @@ REAL DATA SOURCE (JSON / JSONL / CSV / Stream)
    - Demonstrates multi-vendor pluggability (representing Rithmic, IQFeed, or proprietary feeds).
    - Normalizes trades, depth, quotes, and resets without changing downstream code.
 
+3. **BinanceAdapter (`src/flow/ingest/binance.ts`) — Phase 9-Crypto**:
+   - Parses public Spot and USDⓈ-M Futures `aggTrade`/`trade`, `depthUpdate`, and `bookTicker` JSON websocket payloads, including combined-stream wrappers.
+   - Targets BTCUSDT and ETHUSDT through an optional symbol filter; no API key is required for the normalization contract.
+   - Uses Binance's `m` buyer-maker flag for truthful aggressor mapping (`m: false` → BUY taker, `m: true` → SELL taker). Aggregate/trade IDs are not mapped to `matchId` because they are not asserted to be execution IDs in this normalized contract.
+   - Uses millisecond exchange timestamps only. Binance does not provide nanosecond timestamps or packet receive timestamps in these public market streams, so those capability flags remain false.
+   - Requires an anchored depth snapshot before applying diff-depth updates. Spot continuity uses `U/u`; USDⓈ-M additionally honors `pu`. A discontinuity emits a normalized book reset, records `sequenceGapCount`, drops the untrusted update, and waits for the next snapshot.
+   - Snapshot levels are emitted as `depth-delta` adds with `orderCount: undefined`; they are not fabricated as MBO or individual queue orders. Explicit reconnect/reset fixture markers clear the local book.
+
+### 2a. Data-certification status
+
+The checked-in Binance coverage is a representative schema fixture in `tests/phase9crypto-binance.test.ts`. It is **not genuine Binance market data** and no live websocket session or credentialed vendor export was processed during this implementation. The adapter is contract-tested offline against documented Spot and USDⓈ-M message shapes; genuine data certification remains a follow-up operational step.
+
 ---
 
 ## 3. Supported vs Unavailable Fields
@@ -51,8 +63,8 @@ REAL DATA SOURCE (JSON / JSONL / CSV / Stream)
 |----------------------|-----------|----------------------|
 | **Symbol / Instrument** | YES | CME instruments: NQ, MNQ, ES, MES (`src/flow/ingest/types.ts`) |
 | **Event Timestamp (ms)** | YES | Preserved exactly (`timestamp`) |
-| **Matching Nanos** | YES | Preserved in `tsEventNanos: bigint` without floating-point truncation |
-| **Packet Receive Nanos** | YES | Preserved in `tsRecvNanos: bigint` when provided by vendor |
+| **Matching Nanos** | Conditional | Databento preserves nanoseconds; Binance public Spot/Futures streams provide milliseconds only |
+| **Packet Receive Nanos** | Conditional | Preserved when a vendor supplies it; Binance public streams do not |
 | **Sequence Number** | YES | Preserved from feed sequence or deterministic sequence |
 | **Trade Price & Size** | YES | Finite positive numbers enforced by validator |
 | **Trade Aggressor** | YES | Explicit vendor side mapped ('A'->SELL, 'B'->BUY, 'N'/missing->`UNKNOWN`); zero heuristics |
@@ -63,6 +75,12 @@ REAL DATA SOURCE (JSON / JSONL / CSV / Stream)
 | **Top-of-Book Quotes** | YES | `QuoteEvent` with bid, ask, bidSize, askSize |
 | **MBO Individual Orders** | NO | MBP/Trades formats do not include MBO; declared honestly (`hasMBO: false`) |
 | **Fabricated Metrics** | NO | Zero fabrication: missing fields remain explicitly `undefined` or `UNKNOWN` |
+
+### 3a. Binance limitations
+
+- Binance public market streams are MBP-style price/quantity updates, not MBO. Queue position, per-order IDs, order counts, and execution match IDs are unavailable and intentionally remain unavailable.
+- Binance trade and depth identifiers use separate domains. The adapter uses raw depth IDs only for continuity validation and assigns a deterministic feed-local normalized sequence to the shared event stream.
+- A depth stream without a preceding snapshot is rejected as unanchored; this prevents partial deltas from being presented as a complete book.
 
 ---
 

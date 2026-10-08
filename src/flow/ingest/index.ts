@@ -8,3 +8,4 @@ export * from "./validator";
 export * from "./snapshotDelta";
 export * from "./databento";
 export * from "./generic";
+export * from "./binance";

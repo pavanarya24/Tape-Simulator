@@ -139,6 +139,8 @@ export interface IngestionValidationReport {
   capabilities: MicrostructureCapabilities;
   /** True if validation passed within policy tolerance. */
   isValid: boolean;
+  /** Number of source sequence discontinuities detected by an adapter. */
+  sequenceGapCount?: number;
 }
 
 /** Configuration options passed to an ingestion adapter. */
