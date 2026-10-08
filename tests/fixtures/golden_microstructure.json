@@ -1,0 +1,91 @@
+{
+  "instrument": "NQ",
+  "tickSize": 0.25,
+  "records": [
+    {
+      "time": 1716550200000,
+      "type": "reset",
+      "seq": 1,
+      "sym": "NQ",
+      "nanos": "1716550200000000000"
+    },
+    {
+      "time": 1716550200010,
+      "type": "depth",
+      "seq": 2,
+      "sym": "NQ",
+      "side": "bid",
+      "act": "add",
+      "px": 99.0,
+      "sz": 15,
+      "cnt": 3,
+      "nanos": "1716550200010000000"
+    },
+    {
+      "time": 1716550200015,
+      "type": "depth",
+      "seq": 3,
+      "sym": "NQ",
+      "side": "bid",
+      "act": "add",
+      "px": 98.0,
+      "sz": 20,
+      "cnt": 4,
+      "nanos": "1716550200015000000"
+    },
+    {
+      "time": 1716550200020,
+      "type": "depth",
+      "seq": 4,
+      "sym": "NQ",
+      "side": "ask",
+      "act": "add",
+      "px": 101.0,
+      "sz": 12,
+      "cnt": 2,
+      "nanos": "1716550200020000000"
+    },
+    {
+      "time": 1716550200025,
+      "type": "depth",
+      "seq": 5,
+      "sym": "NQ",
+      "side": "ask",
+      "act": "add",
+      "px": 102.0,
+      "sz": 18,
+      "cnt": 5,
+      "nanos": "1716550200025000000"
+    },
+    {
+      "time": 1716550200100,
+      "type": "trade",
+      "seq": 6,
+      "sym": "NQ",
+      "px": 100.0,
+      "sz": 10,
+      "side": "buy",
+      "nanos": "1716550200100000000"
+    },
+    {
+      "time": 1716550200200,
+      "type": "trade",
+      "seq": 7,
+      "sym": "NQ",
+      "px": 101.0,
+      "sz": 5,
+      "side": "buy",
+      "nanos": "1716550200200000000"
+    },
+    {
+      "time": 1716550200300,
+      "type": "trade",
+      "seq": 8,
+      "sym": "NQ",
+      "px": 99.0,
+      "sz": 7,
+      "side": "sell",
+      "nanos": "1716550200300000000"
+    }
+  ]
+}

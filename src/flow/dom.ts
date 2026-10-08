@@ -10,7 +10,7 @@
  * compute tape statistics. Works on any MarketDataFeed via MarketEvent input.
  */
 
-import type { Level, L2Event, MarketEvent, TradeEvent } from "./events";
+import type { DepthDeltaEvent, Level, L2Event, MarketEvent, QuoteEvent, TradeEvent } from "./events";
 
 // Re-exported so UI consumers get the book level shape from one place.
 export type { Level } from "./events";
@@ -230,9 +230,11 @@ export class DOMEngine {
     this.log = [...state.log];
   }
 
-  /** Feed one event. L2 rebuilds the book; trades drive sweep detection. */
+  /** Feed one event. L2 and depth deltas rebuild the book; trades drive sweep detection. */
   processEvent(ev: MarketEvent): void {
     if (ev.kind === "l2") this.onL2(ev);
+    else if (ev.kind === "depth-delta") this.onDepthDelta(ev);
+    else if (ev.kind === "quote") this.onQuote(ev);
     else if (ev.kind === "book-reset") this.onReset(ev.sequence);
     else if (ev.kind === "trade") this.onTrade(ev);
   }
@@ -254,6 +256,74 @@ export class DOMEngine {
     const newBids = clampLevels(ev.bids);
     const newAsks = clampLevels(ev.asks);
     if (newBids.length === 0 || newAsks.length === 0) return;
+    this.applyBookUpdate(newBids, newAsks);
+  }
+
+  private onQuote(ev: QuoteEvent): void {
+    this.sequence = ev.sequence;
+    const topBid: Level = { price: ev.bid, size: ev.bidSize, orderCount: 1 };
+    const topAsk: Level = { price: ev.ask, size: ev.askSize, orderCount: 1 };
+    const otherBids = this.bids.filter((l) => l.price < ev.bid).slice(0, 9);
+    const otherAsks = this.asks.filter((l) => l.price > ev.ask).slice(0, 9);
+    const newBids = [topBid, ...otherBids];
+    const newAsks = [topAsk, ...otherAsks];
+    this.applyBookUpdate(newBids, newAsks);
+  }
+
+  private onDepthDelta(ev: DepthDeltaEvent): void {
+    this.sequence = ev.sequence;
+    const isBid = ev.side === "bid";
+    const sideLevels = isBid ? [...this.bids] : [...this.asks];
+    const idx = sideLevels.findIndex((l) => l.price === ev.price);
+
+    if (ev.action === "delete") {
+      if (idx >= 0) {
+        sideLevels.splice(idx, 1);
+      }
+    } else if (ev.action === "add") {
+      const newLevel: Level = { price: ev.price, size: ev.size, orderCount: ev.orderCount ?? 1 };
+      if (idx >= 0) {
+        sideLevels[idx] = newLevel;
+      } else {
+        sideLevels.push(newLevel);
+        if (isBid) {
+          sideLevels.sort((a, b) => b.price - a.price);
+        } else {
+          sideLevels.sort((a, b) => a.price - b.price);
+        }
+      }
+    } else if (ev.action === "modify") {
+      if (idx >= 0) {
+        sideLevels[idx] = {
+          price: ev.price,
+          size: ev.size,
+          orderCount: ev.orderCount ?? sideLevels[idx].orderCount,
+        };
+      } else {
+        const newLevel: Level = { price: ev.price, size: ev.size, orderCount: ev.orderCount ?? 1 };
+        sideLevels.push(newLevel);
+        if (isBid) {
+          sideLevels.sort((a, b) => b.price - a.price);
+        } else {
+          sideLevels.sort((a, b) => a.price - b.price);
+        }
+      }
+    }
+
+    const clampedSide = sideLevels.slice(0, 10);
+    const newBids = isBid ? clampedSide : this.bids;
+    const newAsks = isBid ? this.asks : clampedSide;
+
+    this.applyBookUpdate(newBids, newAsks);
+  }
+
+  private applyBookUpdate(newBids: Level[], newAsks: Level[]): void {
+    if (newBids.length === 0 || newAsks.length === 0) {
+      this.bids = newBids;
+      this.asks = newAsks;
+      this.hasBook = newBids.length > 0 && newAsks.length > 0;
+      return;
+    }
 
     const bestBid = newBids[0];
     const bestAsk = newAsks[0];
@@ -372,7 +442,7 @@ export class DOMEngine {
       imbalance: sum > 0 ? +((bidLiq - askLiq) / sum).toFixed(4) : null,
       bestBid: this.bids[0]?.price ?? null,
       bestAsk: this.asks[0]?.price ?? null,
-      spread: this.hasBook ? +(this.asks[0].price - this.bids[0].price).toFixed(2) : null,
+      spread: this.hasBook && this.asks[0] && this.bids[0] ? +(this.asks[0].price - this.bids[0].price).toFixed(2) : null,
       stackBidLevels: this.stackBidLevels,
       stackAskLevels: this.stackAskLevels,
       pullBidCount: this.pullBidCount,
