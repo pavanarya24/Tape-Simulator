@@ -72,6 +72,7 @@ import type {
   FlowTimelineEntry,
 } from "../flow/recognition";
 import { FlowTrainingSession, type FlowNotice } from "../flow/session";
+import { SnapshotPublicationScheduler, type SchedulerMetrics } from "../flow/scheduler";
 import {
   DEFAULT_FLOW_COSTS,
   DEFAULT_FLOW_DECISION,
@@ -337,6 +338,30 @@ export class TapeLabController {
   private flowPrevBook: BookView | null = null;
   private flowPrevIndex = -1;
   private flowBookChanges: BookChange[] = [];
+  private flowScheduler = new SnapshotPublicationScheduler();
+
+  constructor() {
+    this.flowScheduler.setPublishCallback(() => {
+      this.notify();
+    });
+  }
+
+  get flowSchedulerMetrics(): SchedulerMetrics {
+    return this.flowScheduler.metrics;
+  }
+
+  get flowSchedulerInstance(): SnapshotPublicationScheduler {
+    return this.flowScheduler;
+  }
+
+  startFlowPlayback(): void {
+    this.flowScheduler.start();
+  }
+
+  stopFlowPlayback(): void {
+    this.flowScheduler.stop();
+    this.flowScheduler.flush();
+  }
 
   private actions: ActionEntry[] = [];
   private notesByKey = new Map<string, JournalNotes>();
@@ -1040,17 +1065,24 @@ export class TapeLabController {
     // carries over to a scenario the trader has not seen yet.
     if (this.flowReplayMode === "REVIEW") this.flowReplayMode = "LIVE";
     this.flowSession.warmup(FLOW_WARMUP);
-    this.notify();
+    this.flowScheduler.reset();
+    this.flowScheduler.flush();
   }
 
   /** Advance the flow session; returns false when nothing was revealed
-   *  (or while the post-reveal hold is active). */
-  stepFlow(n = 1): boolean {
+   *  (or while the post-reveal hold is active). Supports continuous coalesced publication. */
+  stepFlow(n = 1, opts: { continuous?: boolean } = {}): boolean {
     const session = this.flowSession;
     if (!session) return false;
     if (this.flowRevealed && this.flowHeld) return false;
     const taken = session.step(n);
-    this.notify();
+    if (taken > 0) {
+      if (opts.continuous) {
+        this.flowScheduler.requestPublication(taken);
+      } else {
+        this.flowScheduler.flush(taken);
+      }
+    }
     return taken > 0;
   }
 
@@ -1059,7 +1091,7 @@ export class TapeLabController {
     if (!session) return;
     if (this.flowRevealed && this.flowHeld) return;
     session.stepBack();
-    this.notify();
+    this.flowScheduler.flush(1);
   }
 
   /**
@@ -1078,7 +1110,7 @@ export class TapeLabController {
     if (!session) return false;
     if (this.flowRevealed && this.flowHeld) return false;
     const taken = session.stepByUnit(this.flowStepUnit, 1);
-    this.notify();
+    this.flowScheduler.flush(taken);
     return taken > 0;
   }
 
@@ -1099,11 +1131,11 @@ export class TapeLabController {
     // never be replayed against a rewound clock (forward seeks stay legal).
     if (clamped < session.eventIndex && session.snapshot().position.side !== "FLAT") {
       session.setNotice(false, "FLATTEN THE OPEN POSITION BEFORE REWINDING");
-      this.notify();
+      this.flowScheduler.flush();
       return false;
     }
     session.seekTo(clamped);
-    this.notify();
+    this.flowScheduler.flush();
     return true;
   }
 
@@ -1121,17 +1153,17 @@ export class TapeLabController {
       session?.setNotice(false, "REVIEW MODE UNLOCKS AFTER REVEAL");
     }
     this.flowReplayMode = mode;
-    this.notify();
+    this.flowScheduler.flush();
   }
 
   setFlowSpeed(speed: FlowReplaySpeed): void {
     this.flowSpeed = speed;
-    this.notify();
+    this.flowScheduler.flush();
   }
 
   setFlowStepUnit(unit: FlowStepUnit): void {
     this.flowStepUnit = unit;
-    this.notify();
+    this.flowScheduler.flush();
   }
 
   /** ⟲ RESET — rewind the tape to event 0 and clear all trading state. */
@@ -1140,7 +1172,8 @@ export class TapeLabController {
     if (!session) return;
     session.reset();
     this.flowHeld = false;
-    this.notify();
+    this.flowScheduler.reset();
+    this.flowScheduler.flush();
   }
 
   /** "Reveal what it was" — the only mechanism that exposes the truth to UI.
@@ -1166,20 +1199,20 @@ export class TapeLabController {
       // scenario is exactly what the review experience needs.
       this.flowReplayMode = "REVIEW";
     }
-    this.notify();
+    this.flowScheduler.flush();
   }
 
   /** Difficulty selector — passed to the generator on the next GENERATE. */
   setFlowDifficulty(difficulty: FlowDifficulty): void {
     this.flowDifficulty = difficulty;
-    this.notify();
+    this.flowScheduler.flush();
   }
 
   /** CONTINUE AFTER REVEAL — release the hold and keep trading the tape. */
   continueFlowAfterReveal(): boolean {
     if (!this.flowRevealed) return false;
     this.flowHeld = false;
-    this.notify();
+    this.flowScheduler.flush();
     return true;
   }
 
@@ -1190,7 +1223,8 @@ export class TapeLabController {
     if (!session) return;
     session.restart(FLOW_WARMUP);
     this.flowHeld = false;
-    this.notify();
+    this.flowScheduler.reset();
+    this.flowScheduler.flush();
   }
 
   /** REPLAY FROM START — rewind the tape to the first event, keeping journal,
@@ -1199,7 +1233,8 @@ export class TapeLabController {
     const session = this.flowSession;
     if (!session) return false;
     const ok = session.replayFromStart();
-    this.notify();
+    this.flowScheduler.reset();
+    this.flowScheduler.flush();
     return ok;
   }
 
@@ -1214,7 +1249,7 @@ export class TapeLabController {
     } else {
       session.buy();
     }
-    this.notify();
+    this.flowScheduler.flush();
   }
 
   /** MARKET SELL with the current order quantity, at the revealed bid. */
@@ -1226,7 +1261,7 @@ export class TapeLabController {
     } else {
       session.sell();
     }
-    this.notify();
+    this.flowScheduler.flush();
   }
 
   /** FLATTEN — close the whole position (LONG at bid, SHORT at ask). */
@@ -1238,21 +1273,21 @@ export class TapeLabController {
     } else {
       session.flatten();
     }
-    this.notify();
+    this.flowScheduler.flush();
   }
 
   setFlowQty(qty: number): void {
     const session = this.flowSession;
     if (!session) return;
     session.setOrderQty(qty);
-    this.notify();
+    this.flowScheduler.flush();
   }
 
   setFlowDecision(patch: Partial<FlowDecision>): void {
     const session = this.flowSession;
     if (!session) return;
     session.setDecision(patch);
-    this.notify();
+    this.flowScheduler.flush();
   }
 
   setFlowCosts(patch: Partial<FlowCosts>): void {
@@ -1260,7 +1295,7 @@ export class TapeLabController {
     if (!session) return;
     session.setCosts(patch);
     this.flowCosts = { ...this.flowCosts, ...patch };
-    this.notify();
+    this.flowScheduler.flush();
   }
 
   setFlowRisk(patch: Partial<FlowRisk>): void {
@@ -1268,7 +1303,7 @@ export class TapeLabController {
     if (!session) return;
     session.setRisk(patch);
     this.flowRisk = { ...this.flowRisk, ...patch };
-    this.notify();
+    this.flowScheduler.flush();
   }
 
   /* ----------------------------- scenarios ----------------------------- */
@@ -1333,3 +1368,4 @@ export class TapeLabController {
 }
 
 export const controller = new TapeLabController();
+export { TapeLabController as AppController };

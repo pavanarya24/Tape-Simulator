@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
+import { controller } from "../state/app";
 import {
   createChart,
   createSeriesMarkers,
@@ -749,7 +750,7 @@ export function VolumeProfileGutter({ profile }: { profile: VolumeAtPrice[] }) {
   );
 }
 
-export function FlowChart(props: FlowChartProps) {
+function FlowChartInner(props: FlowChartProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -758,6 +759,8 @@ export function FlowChart(props: FlowChartProps) {
   const amaSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const cvdSeriesRef = useRef<ISeriesApi<"Area"> | null>(null);
   const prevPointsCountRef = useRef<number>(0);
+  const prevBucketMsRef = useRef<number>(0);
+  const prevCandlesCountRef = useRef<number>(0);
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -828,6 +831,9 @@ export function FlowChart(props: FlowChartProps) {
       if (cvdSeriesRef.current) cvdSeriesRef.current.setData([]);
       seriesMarkersRef.current?.setMarkers([]);
       prevPointsCountRef.current = 0;
+      prevCandlesCountRef.current = 0;
+      prevBucketMsRef.current = 0;
+      controller.flowSchedulerInstance?.recordChartUpdate(true);
       return;
     }
 
@@ -841,11 +847,56 @@ export function FlowChart(props: FlowChartProps) {
     const rawCandles = buildCandles(props.priceSeries, bucketMs);
     const adaptedCandles = toCandlestickData(rawCandles);
 
-    candleSeries.setData(adaptedCandles);
-    const vwapData =
-      props.showVwap === false ? [] : adaptVwapToLineData(props.vwap, adaptedCandles);
-    vwapSeries.setData(vwapData);
-    amaSeries.setData(adaptAmaToLineData(props.ama, adaptedCandles, bucketMs, rawCandles));
+    const canIncremental =
+      bucketMs === prevBucketMsRef.current &&
+      prevCandlesCountRef.current > 0 &&
+      adaptedCandles.length === prevCandlesCountRef.current &&
+      props.priceSeries.length >= prevPointsCountRef.current;
+
+    if (canIncremental && adaptedCandles.length > 0) {
+      const lastCandle = adaptedCandles[adaptedCandles.length - 1];
+      candleSeries.update(lastCandle);
+
+      const vwapData =
+        props.showVwap === false ? [] : adaptVwapToLineData(props.vwap, adaptedCandles);
+      if (vwapData.length > 0) vwapSeries.update(vwapData[vwapData.length - 1]);
+
+      const amaData = adaptAmaToLineData(props.ama, adaptedCandles, bucketMs, rawCandles);
+      if (amaData.length > 0) amaSeries.update(amaData[amaData.length - 1]);
+
+      if (props.showCvd && cvdSeriesRef.current) {
+        const cvdData = adaptCvdToSeriesData(props.cvdSeries, adaptedCandles, {
+          tradeCount: props.tradeCount,
+          rawCandles,
+        });
+        if (cvdData.length > 0) cvdSeriesRef.current.update(cvdData[cvdData.length - 1]);
+      }
+
+      controller.flowSchedulerInstance?.recordChartUpdate(false);
+    } else {
+      candleSeries.setData(adaptedCandles);
+      const vwapData =
+        props.showVwap === false ? [] : adaptVwapToLineData(props.vwap, adaptedCandles);
+      vwapSeries.setData(vwapData);
+      amaSeries.setData(adaptAmaToLineData(props.ama, adaptedCandles, bucketMs, rawCandles));
+
+      if (props.showCvd) {
+        if (!cvdSeriesRef.current) {
+          cvdSeriesRef.current = chart.addSeries(AreaSeries, getCvdSeriesOptions(), 1);
+        }
+        cvdSeriesRef.current.setData(
+          adaptCvdToSeriesData(props.cvdSeries, adaptedCandles, {
+            tradeCount: props.tradeCount,
+            rawCandles,
+          }),
+        );
+      } else if (cvdSeriesRef.current) {
+        chart.removeSeries(cvdSeriesRef.current);
+        cvdSeriesRef.current = null;
+      }
+
+      controller.flowSchedulerInstance?.recordChartUpdate(true);
+    }
 
     // Synchronize event and trade markers
     const adaptedMarkers = adaptFlowMarkers({
@@ -861,26 +912,12 @@ export function FlowChart(props: FlowChartProps) {
     });
     seriesMarkersRef.current?.setMarkers(adaptedMarkers);
 
-    // CVD lower pane management
-    if (props.showCvd) {
-      if (!cvdSeriesRef.current) {
-        cvdSeriesRef.current = chart.addSeries(AreaSeries, getCvdSeriesOptions(), 1);
-      }
-      cvdSeriesRef.current.setData(
-        adaptCvdToSeriesData(props.cvdSeries, adaptedCandles, {
-          tradeCount: props.tradeCount,
-          rawCandles,
-        }),
-      );
-    } else if (cvdSeriesRef.current) {
-      chart.removeSeries(cvdSeriesRef.current);
-      cvdSeriesRef.current = null;
-    }
-
     if (prevPointsCountRef.current === 0 && adaptedCandles.length > 0) {
       chart.timeScale().fitContent();
     }
     prevPointsCountRef.current = props.priceSeries.length;
+    prevCandlesCountRef.current = adaptedCandles.length;
+    prevBucketMsRef.current = bucketMs;
   }, [
     props.priceSeries,
     props.coarseContext,
@@ -943,3 +980,5 @@ export function FlowChart(props: FlowChartProps) {
     </div>
   );
 }
+
+export const FlowChart = memo(FlowChartInner);
