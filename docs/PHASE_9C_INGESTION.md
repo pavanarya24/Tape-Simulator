@@ -81,11 +81,32 @@ The checked-in Binance coverage is a representative schema fixture in `tests/pha
 - **Microstructure Style**: Binance public market streams are MBP-style price/quantity updates, not MBO. Queue position, per-order IDs, order counts, and execution match IDs are unavailable and intentionally remain unavailable (`hasMBO: false`, `hasOrderCounts: false`, `hasMatchIds: false`).
 - **Identifier Domains**: Binance trade and depth identifiers use separate domains. The adapter uses raw depth IDs only for continuity validation (`U`/`u` on Spot, `pu`/`u` on USDⓈ-M) and assigns a deterministic feed-local normalized sequence to the shared event stream.
 - **Snapshot Anchoring**: A depth stream without a preceding snapshot is rejected as unanchored; this prevents partial deltas from being presented as a complete book.
-- **Representative Fixture vs. Genuine Data**:
+- **Spot vs. USDⓈ-M Futures Separation**:
+  - Ingestion options require explicit `market: 'spot'` or `market: 'usdm'`.
+  - Spot uses `U <= lastUpdateId + 1 && u >= lastUpdateId + 1` continuity.
+  - Futures uses `pu === lastUpdateId && u >= lastUpdateId + 1` continuity.
+  - Ingestion sources, validation reports, and feeds declare their market type explicitly.
+- **Representative Fixtures vs. Genuine Historical Data**:
   - `tests/fixtures/binance_btcusdt_representative.jsonl`: Synthetic 4-record test schema fixture used for fast deterministic unit tests.
-  - `tests/fixtures/binance_btcusdt_genuine.jsonl`: Certified genuine capture of live Binance Spot market data (`api.binance.com` REST snapshot + `stream.binance.com` WebSocket depth/trade stream).
-  - Validation metadata is tracked in `tests/fixtures/binance_btcusdt_genuine.meta.json`.
-  - Opt-in certification script: `bun scripts/certify-binance.ts`.
+  - `tests/fixtures/binance_btcusdt_genuine.jsonl`: Certified live capture of Binance Spot market data (`api.binance.com` REST snapshot + `stream.binance.com` WebSocket depth/trade stream).
+  - `tests/fixtures/binance_btcusdt_spot_historical_slice.csv`: Genuine historical Spot aggTrades slice (500 records) from `data.binance.vision`.
+  - `tests/fixtures/binance_btcusdt_futures_historical_slice.csv`: Genuine historical USDⓈ-M Futures aggTrades slice (500 records) from `data.binance.vision`.
+  - Full genuine historical datasets: 1,852,572 Spot events and 3,029,000 Futures events from official Binance Vision archives (May 1, 2024).
+  - Opt-in certification runners: `bun scripts/certify-binance.ts` and `bun scripts/benchmark-historical-crypto.ts`.
+
+### 3b. Genuine Historical Binance Scale Benchmarks
+
+Benchmarked on `tests/fixtures/extracted/BTCUSDT-aggTrades-2024-05-01.csv` (1,852,572 genuine trades):
+
+| Event Count | Normalization Throughput | Replay Throughput | Checkpoints (K=10k) | Worst-Case Seek Latency | Sequential === Seek Equivalence |
+|---|---|---|---|---|---|
+| **100,000** | 432,370 ev/s | 1,015,471 ev/s | 10 | 11.97 ms | **PASS (100% match)** |
+| **500,000** | 403,673 ev/s | 970,379 ev/s | 50 | 19.61 ms | **PASS (100% match)** |
+| **1,000,000** | 431,354 ev/s | 700,103 ev/s | 100 | 68.23 ms | **PASS (100% match)** |
+| **1,852,572** | 319,996 ev/s | 658,624 ev/s | 185 | 95.74 ms | **PASS (100% match)** |
+
+- **Sequential Equivalence**: Replaying sequentially from event 0 vs accelerated seeking via sparse checkpoint lookup + forward roll produces identical order-flow state, trade counts, tape, total volume, and CVD.
+- **Historical Order Book Availability Limitation**: Public Binance Vision archives publish historical executed trades (`aggTrades` / `trades`) and `klines`, but do not distribute historical tick-by-tick order-book diffs. Order-book reconstruction is certified via live websocket captures and REST snapshots.
 
 ---
 

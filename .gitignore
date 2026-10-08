@@ -20,3 +20,9 @@ dist/
 build/
 node_modules/
 *.tsbuildinfo
+
+# Large dataset caches (not committed to git)
+tests/fixtures/*.zip
+tests/fixtures/extracted/
+tests/fixtures/extracted_futures/
+tests/fixtures/sample_vision.zip

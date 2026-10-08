@@ -1,0 +1,19 @@
+{
+  "source": "Binance Vision Official Historical USDⓈ-M Futures Archive (https://data.binance.vision/data/futures/um/daily/aggTrades/BTCUSDT/BTCUSDT-aggTrades-2024-05-01.zip)",
+  "market": "usdm",
+  "symbol": "BTCUSDT",
+  "date": "2024-05-01",
+  "format": "csv",
+  "hasHeader": true,
+  "columns": [
+    "agg_trade_id",
+    "price",
+    "quantity",
+    "first_trade_id",
+    "last_trade_id",
+    "transact_time",
+    "is_buyer_maker"
+  ],
+  "recordsInSlice": 500,
+  "totalRecordsInFullFile": 3029000
+}

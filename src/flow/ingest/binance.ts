@@ -102,6 +102,29 @@ export interface BinanceBookTickerMessage {
   A: string;
 }
 
+export interface BinanceRestAggTradeMessage {
+  a: number;
+  p: string;
+  q: string;
+  f?: number;
+  l?: number;
+  T: number;
+  m: boolean;
+  M?: boolean;
+  s?: string;
+}
+
+export interface BinanceRestTradeMessage {
+  id: number;
+  price: string;
+  qty: string;
+  quoteQty?: string;
+  time: number;
+  isBuyerMaker: boolean;
+  isBestMatch?: boolean;
+  s?: string;
+}
+
 export type BinanceRawMessage =
   | BinanceAggTradeMessage
   | BinanceTradeMessage
@@ -109,6 +132,8 @@ export type BinanceRawMessage =
   | BinanceDepthSnapshotMessage
   | BinanceResetMessage
   | BinanceBookTickerMessage
+  | BinanceRestAggTradeMessage
+  | BinanceRestTradeMessage
   | { stream: string; data: BinanceRawMessage };
 
 type BinanceWireMessage = Exclude<BinanceRawMessage, { stream: string; data: BinanceRawMessage }>;
@@ -151,7 +176,8 @@ export class BinanceAdapter implements MarketDataAdapter<string | BinanceRawMess
     raw: string | BinanceRawMessage[],
     options: BinanceIngestionOptions = {},
   ): { events: NormalizedMarketEvent[]; report: IngestionValidationReport } {
-    const records = this.parseRawRecords(raw);
+    const fallbackSymbol = options.symbol?.toUpperCase() ?? "BTCUSDT";
+    const records = this.parseRawRecords(raw, fallbackSymbol);
     const validator = new MicrostructureValidator({
       strict: options.strict,
       source: `Binance ${options.market === "usdm" ? "USDⓈ-M Futures" : "Spot"}`,
@@ -172,7 +198,7 @@ export class BinanceAdapter implements MarketDataAdapter<string | BinanceRawMess
       if (options.maxEvents && events.length >= options.maxEvents) break;
       const rec = records[i];
       const message = this.unwrap(rec);
-      const symbol = this.symbolOf(message);
+      const symbol = this.symbolOf(message, fallbackSymbol);
       if (symbolFilter && symbol !== symbolFilter) continue;
 
       if (this.isReset(message)) {
@@ -191,7 +217,15 @@ export class BinanceAdapter implements MarketDataAdapter<string | BinanceRawMess
       }
 
       if (this.isAggTrade(message) || this.isTrade(message)) {
-        emit(this.tradeEvent(message.s, message.T, message.p, message.q, message.m, i), i);
+        emit(this.tradeEvent(symbol, message.T, message.p, message.q, message.m, i), i);
+        continue;
+      }
+      if (this.isRestAggTrade(message)) {
+        emit(this.tradeEvent(symbol, message.T, message.p, message.q, message.m, i), i);
+        continue;
+      }
+      if (this.isRestTrade(message)) {
+        emit(this.tradeEvent(symbol, message.time, message.price, message.qty, message.isBuyerMaker, i), i);
         continue;
       }
       if (this.isBookTicker(message)) {
@@ -316,9 +350,9 @@ export class BinanceAdapter implements MarketDataAdapter<string | BinanceRawMess
     return [...book.entries()].sort((a, b) => (side === "bid" ? b[0] - a[0] : a[0] - b[0]));
   }
 
-  private symbolOf(message: BinanceRawMessage): string {
-    if ("data" in message) return this.symbolOf(message.data);
-    return message.s.toUpperCase();
+  private symbolOf(message: BinanceRawMessage, fallbackSymbol = "BTCUSDT"): string {
+    if ("data" in message) return this.symbolOf(message.data, fallbackSymbol);
+    return ((message as any).s ?? fallbackSymbol).toUpperCase();
   }
 
   private unwrap(message: BinanceRawMessage): BinanceWireMessage {
@@ -341,6 +375,14 @@ export class BinanceAdapter implements MarketDataAdapter<string | BinanceRawMess
     return "e" in message && message.e === "trade";
   }
 
+  private isRestAggTrade(message: BinanceWireMessage): message is BinanceRestAggTradeMessage {
+    return "a" in message && "p" in message && "T" in message && "m" in message && !("e" in message);
+  }
+
+  private isRestTrade(message: BinanceWireMessage): message is BinanceRestTradeMessage {
+    return "id" in message && "price" in message && "time" in message && "isBuyerMaker" in message && !("e" in message);
+  }
+
   private isDepthUpdate(message: BinanceWireMessage): message is BinanceDepthUpdateMessage {
     return "e" in message && message.e === "depthUpdate";
   }
@@ -354,11 +396,66 @@ export class BinanceAdapter implements MarketDataAdapter<string | BinanceRawMess
     return value;
   }
 
-  private parseRawRecords(raw: string | BinanceRawMessage[]): BinanceRawMessage[] {
+  private parseRawRecords(raw: string | BinanceRawMessage[], defaultSymbol = "BTCUSDT"): BinanceRawMessage[] {
     if (Array.isArray(raw)) return raw;
     const text = raw.trim();
     if (!text) return [];
     if (text.startsWith("[") && text.endsWith("]")) return JSON.parse(text) as BinanceRawMessage[];
-    return text.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as BinanceRawMessage);
+
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    const records: BinanceRawMessage[] = [];
+
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      const line = lines[lineIndex].trim();
+      if (!line) continue;
+
+      if (line.startsWith("{")) {
+        records.push(JSON.parse(line) as BinanceRawMessage);
+        continue;
+      }
+
+      // CSV line parsing
+      const cols = line.split(",");
+      if (cols.length < 5) continue;
+
+      // Skip header line if present (e.g. agg_trade_id, trade_id, or non-numeric first col)
+      if (cols[0] === "agg_trade_id" || cols[0] === "trade_id" || isNaN(Number(cols[0]))) {
+        continue;
+      }
+
+      // 1. Binance Vision aggTrades format:
+      // agg_trade_id, price, quantity, first_trade_id, last_trade_id, transact_time, is_buyer_maker, [is_best_match]
+      if (cols.length >= 7 && Number(cols[5]) > 1_000_000_000_000) {
+        records.push({
+          e: "aggTrade",
+          E: Number(cols[5]),
+          s: defaultSymbol,
+          a: Number(cols[0]),
+          p: cols[1].trim(),
+          q: cols[2].trim(),
+          T: Number(cols[5]),
+          m: cols[6].trim().toLowerCase() === "true",
+        });
+        continue;
+      }
+
+      // 2. Binance Vision trades format:
+      // trade_id, price, qty, quote_qty, time, is_buyer_maker, [is_best_match]
+      if (cols.length >= 6 && Number(cols[4]) > 1_000_000_000_000) {
+        records.push({
+          e: "trade",
+          E: Number(cols[4]),
+          s: defaultSymbol,
+          t: Number(cols[0]),
+          p: cols[1].trim(),
+          q: cols[2].trim(),
+          T: Number(cols[4]),
+          m: cols[5].trim().toLowerCase() === "true",
+        });
+        continue;
+      }
+    }
+
+    return records;
   }
 }
