@@ -302,7 +302,134 @@ describe("Phase 9.B-5 — Snapshot Publication Scheduler & UI Render Performance
   });
 
   /* -------------------------------------------------------------------------
-     4. High-Frequency Benchmark Harness (100k, 500k, 1M, 3M events)
+     4. Chart setData() Validation & Incremental Discipline (Scenarios A–G)
+     ------------------------------------------------------------------------- */
+  describe("Chart setData() Validation & Update Lifecycle", () => {
+    test("Scenario A–G: validates full setData vs incremental update across navigation lifecycle", () => {
+      const scheduler = new SnapshotPublicationScheduler({ fps: 25, useRaf: false });
+
+      // Scenario A: Initial mount -> expected full setData
+      scheduler.recordChartUpdate(true);
+      expect(scheduler.metrics.chartSetDataCount).toBe(1);
+      expect(scheduler.metrics.chartUpdatesCount).toBe(1);
+
+      // Scenario B: Continuous forward replay on existing bar -> incremental update()
+      for (let i = 0; i < 5; i++) {
+        scheduler.recordChartUpdate(false);
+      }
+      expect(scheduler.metrics.chartSetDataCount).toBe(1);
+      expect(scheduler.metrics.chartUpdatesCount).toBe(6);
+
+      // Scenario C: Forward replay creating new bar -> incremental update/append
+      scheduler.recordChartUpdate(false);
+      expect(scheduler.metrics.chartSetDataCount).toBe(1);
+      expect(scheduler.metrics.chartUpdatesCount).toBe(7);
+
+      // Scenario D: Backward seek -> full setData allowed/expected
+      scheduler.recordChartUpdate(true);
+      expect(scheduler.metrics.chartSetDataCount).toBe(2);
+      expect(scheduler.metrics.chartUpdatesCount).toBe(8);
+
+      // Scenario E: Forward seek after backward seek -> full setData allowed/expected
+      scheduler.recordChartUpdate(true);
+      expect(scheduler.metrics.chartSetDataCount).toBe(3);
+      expect(scheduler.metrics.chartUpdatesCount).toBe(9);
+
+      // Scenario F: Reset -> full dataset reconstruction allowed
+      scheduler.recordChartUpdate(true);
+      expect(scheduler.metrics.chartSetDataCount).toBe(4);
+      expect(scheduler.metrics.chartUpdatesCount).toBe(10);
+
+      // Scenario G: Scenario restart -> full dataset reconstruction allowed
+      scheduler.recordChartUpdate(true);
+      expect(scheduler.metrics.chartSetDataCount).toBe(5);
+      expect(scheduler.metrics.chartUpdatesCount).toBe(11);
+    });
+  });
+
+  /* -------------------------------------------------------------------------
+     5. Scheduler Generation Tokens & Stale-Frame Invariants
+     ------------------------------------------------------------------------- */
+  describe("Scheduler Generation Tokens & Stale-Frame Invariants", () => {
+    test("seek(100000) queued publication followed by seek(10000) guarantees 100000 cannot overwrite 10000", () => {
+      let pendingCb: (() => void) | null = null;
+      const scheduler = new SnapshotPublicationScheduler({
+        timerProvider: {
+          schedule: (cb) => {
+            pendingCb = cb;
+            return () => {
+              pendingCb = null;
+            };
+          },
+        },
+      });
+
+      const publishedGenerations: number[] = [];
+      scheduler.setPublishCallback((gen) => {
+        publishedGenerations.push(gen);
+      });
+
+      // Step/seek toward 100000 -> schedules publication
+      scheduler.requestPublication(100_000);
+      expect(pendingCb).not.toBeNull();
+
+      // Immediate seek toward 10000 -> flushes synchronously
+      scheduler.flush(10_000);
+      expect(publishedGenerations).toEqual([2]); // Generation 2 was published
+
+      // Attempting to invoke the older pending callback (if it hadn't been cancelled)
+      // will not publish an older generation
+      if (pendingCb) {
+        pendingCb();
+      }
+      expect(publishedGenerations).toEqual([2]);
+      expect(scheduler.metrics.publicationsCount).toBe(1);
+    });
+
+    test("continuous replay -> seek backward -> continuous replay preserves generation monotonicity", () => {
+      controller.generateFlowScenario("spring");
+      controller.startFlowPlayback();
+
+      // Rapid continuous replay
+      for (let i = 0; i < 10; i++) {
+        controller.stepFlow(5, { continuous: true });
+      }
+
+      // Seek backward flushes immediately
+      const idxBefore = controller.getState().flow.eventIndex;
+      expect(idxBefore).toBeGreaterThan(0);
+      controller.seekFlow(20);
+      expect(controller.getState().flow.eventIndex).toBe(20);
+
+      // Resume continuous replay
+      for (let i = 0; i < 5; i++) {
+        controller.stepFlow(2, { continuous: true });
+      }
+      controller.stopFlowPlayback();
+
+      expect(controller.getState().flow.eventIndex).toBe(30);
+    });
+
+    test("start -> stop -> seek -> restart prevents stale callbacks from publishing old state", () => {
+      controller.generateFlowScenario("spring");
+
+      controller.startFlowPlayback();
+      controller.stepFlow(5, { continuous: true });
+
+      controller.stopFlowPlayback();
+      controller.seekFlow(10);
+      expect(controller.getState().flow.eventIndex).toBe(10);
+
+      controller.startFlowPlayback();
+      controller.stepFlow(2, { continuous: true });
+      controller.stopFlowPlayback();
+
+      expect(controller.getState().flow.eventIndex).toBe(12);
+    });
+  });
+
+  /* -------------------------------------------------------------------------
+     6. High-Frequency Benchmark Harness (100k, 500k, 1M, 3M events)
      ------------------------------------------------------------------------- */
   describe("High-Frequency Replay Benchmarks & Coalescing Ratios", () => {
     const DATASET_SIZES = [100_000, 500_000, 1_000_000, 3_000_000];
@@ -311,7 +438,7 @@ describe("Phase 9.B-5 — Snapshot Publication Scheduler & UI Render Performance
       test(
         `processes ${size.toLocaleString()} events: measures engine vs scheduler throughput and coalescing`,
         () => {
-          // A. Engine-only baseline
+          // A. Engine-only baseline (Feed iteration)
           const feedBaseline = new SyntheticMarketDataFeed({
             seed: 999,
             plan: [{ kind: "meander", trades: Math.ceil(size * 0.75) }],
@@ -392,27 +519,31 @@ describe("Phase 9.B-5 — Snapshot Publication Scheduler & UI Render Performance
 
           const schedMs = Math.max(0.1, t1Sched - t0Sched);
           const schedThroughput = Math.round(processed / (schedMs / 1000));
-          const ratio = scheduler.coalescingRatio;
+          const metrics = scheduler.metrics;
           const eventsPerPub = uiPublications > 0 ? Math.round(processed / uiPublications) : processed;
 
           console.log(
             `\n==================================================` +
               `\n[Phase 9.B-5 Benchmark: ${size.toLocaleString()} events]` +
-              `\n- Engine-Only Replay: ${baselineThroughput.toLocaleString()} ev/s (${baselineMs.toFixed(1)} ms)` +
-              `\n- Engine + Scheduler Replay: ${schedThroughput.toLocaleString()} ev/s (${schedMs.toFixed(1)} ms)` +
-              `\n- Total Events Processed: ${processed.toLocaleString()}` +
-              `\n- UI Publications: ${uiPublications.toLocaleString()} (reduced from ${processed.toLocaleString()}!)` +
+              `\n- Feed Iteration Throughput: ${baselineThroughput.toLocaleString()} ev/s (${baselineMs.toFixed(1)} ms)` +
+              `\n- Scheduler Processing Throughput: ${schedThroughput.toLocaleString()} ev/s (${schedMs.toFixed(1)} ms)` +
+              `\n- Engine Events: ${processed.toLocaleString()}` +
+              `\n- Scheduler Invalidations: ${metrics.invalidationsCount.toLocaleString()}` +
+              `\n- Actual Publications: ${uiPublications.toLocaleString()} (reduced from ${processed.toLocaleString()}!)` +
+              `\n- Dropped/Coalesced Invalidations: ${metrics.coalescedInvalidationsCount.toLocaleString()}` +
               `\n- Events per UI Publication: ${eventsPerPub.toLocaleString()}` +
-              `\n- Chart Updates (Incremental): ${chartUpdates.toLocaleString()}` +
-              `\n- Chart SetData Calls (Full): ${setDataCalls}` +
-              `\n- Scheduler Coalescing Ratio: ${(ratio * 100).toFixed(2)}%` +
+              `\n- Chart Incremental Updates: ${chartUpdates.toLocaleString()}` +
+              `\n- Chart SetData Calls: ${setDataCalls}` +
+              `\n- Actual Reduction Percentage: ${scheduler.reductionPercentage.toFixed(4)}%` +
+              `\n- Batch Arrival Coalescing Ratio: ${(scheduler.coalescingRatio * 100).toFixed(2)}%` +
               `\n==================================================`,
           );
 
           expect(processed).toBe(size);
           expect(schedThroughput).toBeGreaterThan(500_000);
           expect(uiPublications).toBeLessThan(size / 100);
-          expect(ratio).toBeGreaterThanOrEqual(0.75);
+          expect(scheduler.reductionPercentage).toBeGreaterThan(99.9);
+          expect(scheduler.coalescingRatio).toBeGreaterThanOrEqual(0.75);
         },
         60_000,
       );

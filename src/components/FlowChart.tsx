@@ -850,7 +850,8 @@ function FlowChartInner(props: FlowChartProps) {
     const canIncremental =
       bucketMs === prevBucketMsRef.current &&
       prevCandlesCountRef.current > 0 &&
-      adaptedCandles.length === prevCandlesCountRef.current &&
+      (adaptedCandles.length === prevCandlesCountRef.current ||
+        adaptedCandles.length === prevCandlesCountRef.current + 1) &&
       props.priceSeries.length >= prevPointsCountRef.current;
 
     if (canIncremental && adaptedCandles.length > 0) {

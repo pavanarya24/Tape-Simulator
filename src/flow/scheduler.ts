@@ -28,6 +28,10 @@ export interface SchedulerOptions {
 export interface SchedulerMetrics {
   /** Total high-frequency engine events processed. */
   eventsProcessed: number;
+  /** Total scheduler invalidation requests (requestPublication + flush). */
+  invalidationsCount: number;
+  /** Invalidation requests coalesced into already-scheduled pending frames. */
+  coalescedInvalidationsCount: number;
   /** Total publications dispatched to subscribers. */
   publicationsCount: number;
   /** Events that were coalesced within pending publication windows. */
@@ -53,6 +57,8 @@ export class SnapshotPublicationScheduler {
 
   private _metrics: SchedulerMetrics = {
     eventsProcessed: 0,
+    invalidationsCount: 0,
+    coalescedInvalidationsCount: 0,
     publicationsCount: 0,
     coalescedCount: 0,
     flushCount: 0,
@@ -86,9 +92,21 @@ export class SnapshotPublicationScheduler {
       : 0;
   }
 
+  /**
+   * Actual reduction percentage in UI publications compared to engine events:
+   * (1 - publicationsCount / eventsProcessed) * 100%
+   */
+  get reductionPercentage(): number {
+    return this._metrics.eventsProcessed > 0
+      ? (1 - this._metrics.publicationsCount / this._metrics.eventsProcessed) * 100
+      : 0;
+  }
+
   resetMetrics(): void {
     this._metrics = {
       eventsProcessed: 0,
+      invalidationsCount: 0,
+      coalescedInvalidationsCount: 0,
       publicationsCount: 0,
       coalescedCount: 0,
       flushCount: 0,
@@ -110,12 +128,14 @@ export class SnapshotPublicationScheduler {
    */
   requestPublication(eventCount = 1): void {
     this._metrics.eventsProcessed += eventCount;
+    this._metrics.invalidationsCount++;
     this.currentGeneration++;
     const targetGen = this.currentGeneration;
 
     if (this.pendingCancel !== null) {
       // Already scheduled: coalesce this event into the upcoming frame
       this._metrics.coalescedCount += eventCount;
+      this._metrics.coalescedInvalidationsCount++;
       return;
     }
 
@@ -136,6 +156,7 @@ export class SnapshotPublicationScheduler {
    */
   flush(eventCount = 0): void {
     this.cancelScheduled();
+    this._metrics.invalidationsCount++;
     if (eventCount > 0) {
       this._metrics.eventsProcessed += eventCount;
     }
