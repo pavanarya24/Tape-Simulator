@@ -1,0 +1,21 @@
+{
+  "capturedAt": "2026-10-08T13:55:47.662Z",
+  "source": "Binance Spot Public REST & WebSocket APIs (api.binance.com / stream.binance.com)",
+  "market": "spot",
+  "symbol": "BTCUSDT",
+  "streams": [
+    "btcusdt@depth@100ms",
+    "btcusdt@trade"
+  ],
+  "records": {
+    "total": 125,
+    "snapshot": 1,
+    "depthUpdate": 38,
+    "trade": 86
+  },
+  "snapshotLastUpdateId": 101194629414,
+  "finalUpdateId": 101194631831,
+  "timestampStart": 1791467742914,
+  "timestampEnd": 1791467746750,
+  "gapsDetected": 0
+}

@@ -76,11 +76,16 @@ The checked-in Binance coverage is a representative schema fixture in `tests/pha
 | **MBO Individual Orders** | NO | MBP/Trades formats do not include MBO; declared honestly (`hasMBO: false`) |
 | **Fabricated Metrics** | NO | Zero fabrication: missing fields remain explicitly `undefined` or `UNKNOWN` |
 
-### 3a. Binance limitations
+### 3a. Binance Semantics, Limitations & Certification
 
-- Binance public market streams are MBP-style price/quantity updates, not MBO. Queue position, per-order IDs, order counts, and execution match IDs are unavailable and intentionally remain unavailable.
-- Binance trade and depth identifiers use separate domains. The adapter uses raw depth IDs only for continuity validation and assigns a deterministic feed-local normalized sequence to the shared event stream.
-- A depth stream without a preceding snapshot is rejected as unanchored; this prevents partial deltas from being presented as a complete book.
+- **Microstructure Style**: Binance public market streams are MBP-style price/quantity updates, not MBO. Queue position, per-order IDs, order counts, and execution match IDs are unavailable and intentionally remain unavailable (`hasMBO: false`, `hasOrderCounts: false`, `hasMatchIds: false`).
+- **Identifier Domains**: Binance trade and depth identifiers use separate domains. The adapter uses raw depth IDs only for continuity validation (`U`/`u` on Spot, `pu`/`u` on USDⓈ-M) and assigns a deterministic feed-local normalized sequence to the shared event stream.
+- **Snapshot Anchoring**: A depth stream without a preceding snapshot is rejected as unanchored; this prevents partial deltas from being presented as a complete book.
+- **Representative Fixture vs. Genuine Data**:
+  - `tests/fixtures/binance_btcusdt_representative.jsonl`: Synthetic 4-record test schema fixture used for fast deterministic unit tests.
+  - `tests/fixtures/binance_btcusdt_genuine.jsonl`: Certified genuine capture of live Binance Spot market data (`api.binance.com` REST snapshot + `stream.binance.com` WebSocket depth/trade stream).
+  - Validation metadata is tracked in `tests/fixtures/binance_btcusdt_genuine.meta.json`.
+  - Opt-in certification script: `bun scripts/certify-binance.ts`.
 
 ---
 
