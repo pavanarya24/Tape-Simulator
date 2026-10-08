@@ -192,6 +192,65 @@ describe("Phase 9-C Checkpoint Replay Equivalence on Real Data", () => {
       }
     }
   });
+
+  it("verifies sequential replay === checkpoint seek replay on 50,000-event representative dataset across targets (0, 1, 9999, 10000, 10001, 50000)", () => {
+    const N = 50_000;
+    const rawBatch = new Array(N);
+    const startNanos = 1716550200000000000n;
+
+    for (let i = 0; i < N; i++) {
+      const isTrade = i % 4 === 0;
+      rawBatch[i] = {
+        ts_event: startNanos + BigInt(i * 1000),
+        action: isTrade ? "T" : i % 2 === 0 ? "A" : "M",
+        side: i % 2 === 0 ? "A" : "B",
+        price: 18250.0 + (i % 20) * 0.25,
+        size: 1 + (i % 10),
+        sequence: i + 1,
+        order_cnt: 1 + (i % 5),
+        symbol: "NQ",
+      };
+    }
+
+    const adapter = new DatabentoAdapter();
+    const { events } = adapter.normalize(rawBatch);
+
+    const feedSeq = new RealMarketDataFeed(events);
+    const feedSeek = new RealMarketDataFeed(events);
+
+    // Default K=10,000 checkpoint interval
+    const engineSeek = new TrainingEngine(feedSeek, null, { checkpointInterval: 10000 });
+    // Warm up seek engine up to 50k to populate checkpoints at 0, 10k, 20k, 30k, 40k, 50k
+    engineSeek.stepForward(N);
+
+    const targets = [0, 1, 9999, 10000, 10001, 50000];
+
+    for (const target of targets) {
+      // Re-run clean sequential engine from 0
+      feedSeq.reset();
+      const engineSeq = new TrainingEngine(feedSeq, null);
+      if (target > 0) engineSeq.stepForward(target);
+
+      const seqSnap = engineSeq.snapshot();
+      engineSeek.seekTo(target);
+      const seekSnap = engineSeek.snapshot();
+
+      // Verify all required microstructure and DOM metrics
+      expect(seekSnap.eventIndex).toBe(seqSnap.eventIndex);
+      expect(seekSnap.sequence).toBe(seqSnap.sequence);
+      expect(seekSnap.timestamp).toBe(seqSnap.timestamp);
+      expect(seekSnap.orderFlow.totalVolume).toBe(seqSnap.orderFlow.totalVolume);
+      expect(seekSnap.orderFlow.delta).toBe(seqSnap.orderFlow.delta);
+      expect(seekSnap.orderFlow.cumulativeDelta).toBe(seqSnap.orderFlow.cumulativeDelta);
+      expect(seekSnap.orderFlow.vwap).toBe(seqSnap.orderFlow.vwap);
+      expect(seekSnap.orderFlow.volumeAtPrice.length).toBe(seqSnap.orderFlow.volumeAtPrice.length);
+      expect(seekSnap.dom.bestBid).toBe(seqSnap.dom.bestBid);
+      expect(seekSnap.dom.bestAsk).toBe(seqSnap.dom.bestAsk);
+      expect(seekSnap.dom.bids.length).toBe(seqSnap.dom.bids.length);
+      expect(seekSnap.dom.asks.length).toBe(seqSnap.dom.asks.length);
+      expect(seekSnap.dom.hasBook).toBe(seqSnap.dom.hasBook);
+    }
+  });
 });
 
 describe("Phase 9-C Blind Mode Protections on Real Data", () => {

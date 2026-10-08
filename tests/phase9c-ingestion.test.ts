@@ -58,6 +58,19 @@ describe("Phase 9-C.1 Vendor-Neutral Ingestion Contracts & Instruments", () => {
     expect(adapter.capabilities.hasReceiveTimestamp).toBe(true);
     expect(adapter.capabilities.hasMatchIds).toBe(true);
   });
+
+  it("enforces MBP != MBO boundary: MBP input cannot cause hasMBO to become true", () => {
+    const adapter = new DatabentoAdapter();
+    expect(adapter.capabilities.hasMBO).toBe(false);
+
+    // Normalizing MBP-1 / MBP-10 records must strictly leave hasMBO false
+    const mbpRecords = [
+      { ts_event: "1716550200000000000", action: "A", side: "B", price: 18250, size: 10, order_cnt: 2 },
+      { ts_event: "1716550200001000000", bid_px_00: 18250, ask_px_00: 18250.25, bid_sz_00: 10, ask_sz_00: 15 },
+    ];
+    const { report } = adapter.normalize(mbpRecords);
+    expect(report.capabilities.hasMBO).toBe(false);
+  });
 });
 
 describe("Phase 9-C.2 Databento Real Microstructure Normalization", () => {
@@ -212,6 +225,37 @@ describe("Phase 9-C.3 Snapshot-to-Delta Conversion", () => {
     const add = deltas3.find((d) => d.action === "add");
     expect(add?.price).toBe(102);
     expect(add?.size).toBe(8);
+  });
+
+  it("handles reordered snapshot levels and resets cleanly without MBO fabrication", () => {
+    const converter = new SnapshotDeltaConverter({ symbol: "ES", startSequence: 10 });
+
+    // Initial snapshot
+    const d1 = converter.convert(
+      5000,
+      [{ price: 5000, size: 50, orderCount: 10 }, { price: 4999.75, size: 40, orderCount: 8 }],
+      [{ price: 5000.25, size: 30, orderCount: 6 }],
+    );
+    expect(d1.length).toBe(3);
+
+    // Unchanged with reversed array order (levels arrived out of sort) -> must NOT produce deltas
+    const d2 = converter.convert(
+      5001,
+      [{ price: 4999.75, size: 40, orderCount: 8 }, { price: 5000, size: 50, orderCount: 10 }],
+      [{ price: 5000.25, size: 30, orderCount: 6 }],
+    );
+    expect(d2.length).toBe(0);
+
+    // Reset clears state
+    converter.reset(1);
+    const d3 = converter.convert(
+      5002,
+      [{ price: 5000, size: 50, orderCount: 10 }],
+      [{ price: 5000.25, size: 30, orderCount: 6 }],
+    );
+    // After reset, previous state is forgotten, all levels are ADDs
+    expect(d3.length).toBe(2);
+    expect(d3.every((d) => d.action === "add")).toBe(true);
   });
 });
 
