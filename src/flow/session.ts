@@ -28,7 +28,8 @@ import { CONTRACTS } from "../market/instruments";
 import type { MarketDataFeed } from "./feed";
 import type { FlowDifficulty, ScenarioTruth } from "./scenarios";
 import { TIME_STEP_MS, type FlowStepUnit } from "./replay";
-import { TrainingEngine, type TrainingSnapshot } from "./training";
+import { TrainingEngine, type TrainingSnapshot, type SeekMetrics } from "./training";
+import type { CheckpointManager } from "./checkpointManager";
 import {
   DEFAULT_FLOW_COSTS,
   DEFAULT_FLOW_DECISION,
@@ -62,6 +63,8 @@ export interface FlowSessionOptions {
   contract?: ContractSpec;
   /** Difficulty the scenario was generated at (Phase 8C breakdown metric). */
   difficulty?: FlowDifficulty;
+  /** Checkpoint cadence in event count (default 10,000). */
+  checkpointInterval?: number;
 }
 
 export interface FlowNotice {
@@ -192,7 +195,7 @@ export class FlowTrainingSession {
   } | null = null;
 
   constructor(feed: MarketDataFeed, truth: ScenarioTruth | null = null, opts: FlowSessionOptions = {}) {
-    this.training = new TrainingEngine(feed, truth);
+    this.training = new TrainingEngine(feed, truth, { checkpointInterval: opts.checkpointInterval });
     this.truth = truth;
     this.sessionId = opts.sessionId ?? "flow-session";
     this.difficulty = opts.difficulty ?? "INTERMEDIATE";
@@ -213,6 +216,14 @@ export class FlowTrainingSession {
     return this.training.totalEvents;
   }
 
+  get lastSeekMetrics(): SeekMetrics | null {
+    return this.training.lastSeekMetrics;
+  }
+
+  get checkpointManager(): CheckpointManager {
+    return this.training.checkpointManager;
+  }
+
   /** Reveal initial context without moving past it (generate/restart). */
   warmup(n: number): void {
     this.training.stepForward(n);
@@ -226,8 +237,17 @@ export class FlowTrainingSession {
     return taken;
   }
 
+  /** Alias for step(n) maintaining parity with TrainingEngine. */
+  stepForward(n = 1): number {
+    return this.step(n);
+  }
+
   stepBack(): void {
+    const prev = this.training.eventIndex;
     this.training.stepBack();
+    if (this.training.eventIndex < prev) {
+      this.handleBackwardSeek(this.training.eventIndex);
+    }
     this.sync();
   }
 
@@ -273,8 +293,17 @@ export class FlowTrainingSession {
   }
 
   seekTo(index: number): void {
+    const prev = this.training.eventIndex;
     this.training.seekTo(index);
+    if (this.training.eventIndex < prev) {
+      this.handleBackwardSeek(this.training.eventIndex);
+    }
     this.sync();
+  }
+
+  /** Alias for seekTo(index). */
+  seek(index: number): void {
+    this.seekTo(index);
   }
 
   /** ⟲ RESET: rewind to event 0 and clear all trading state. */
@@ -282,6 +311,10 @@ export class FlowTrainingSession {
     this.training.reset();
     this.exec.reset();
     this.notice = null;
+    this.timelineCache = null;
+    this.recognition = null;
+    this.recognitionIndex = -1;
+    this.amaCache = null;
     this.sync();
   }
 
@@ -294,6 +327,10 @@ export class FlowTrainingSession {
     this.exec.reset();
     this.orderQty = 1;
     this.notice = null;
+    this.timelineCache = null;
+    this.recognition = null;
+    this.recognitionIndex = -1;
+    this.amaCache = null;
     this.training.seekTo(warmupEvents);
     this.sync();
   }
@@ -308,10 +345,47 @@ export class FlowTrainingSession {
       this.notice = { ok: false, text: "FLATTEN THE OPEN POSITION BEFORE REPLAYING" };
       return false;
     }
+    this.timelineCache = null;
+    this.recognition = null;
+    this.recognitionIndex = -1;
+    this.amaCache = null;
     this.training.seekTo(0);
     this.notice = null;
     this.sync();
     return true;
+  }
+
+  /**
+   * Invalidate derived caches upon backward seek so no future information leaks.
+   * Core state is restored by TrainingEngine; derived state (recognition, AMA, timeline)
+   * is invalidated or truncated to target.
+   */
+  private handleBackwardSeek(target: number): void {
+    this.recognition = null;
+    this.recognitionIndex = -1;
+    this.amaCache = null;
+
+    if (target === 0 && this.exec.positionView().side === "FLAT") {
+      this.exec.reset();
+    }
+
+    if (this.timelineCache) {
+      const remainingEntries = this.timelineCache.entries.filter((e) => e.index <= target);
+      if (remainingEntries.length === 0) {
+        this.timelineCache = null;
+      } else {
+        const remainingLastAt = new Map<string, number>();
+        for (const e of remainingEntries) {
+          remainingLastAt.set(e.metric, e.index);
+        }
+        this.timelineCache = {
+          maxIndex: target,
+          signature: FlowTrainingSession.signatureOf(recognizeFlow(this.training.snapshot())),
+          entries: remainingEntries,
+          lastAt: remainingLastAt,
+        };
+      }
+    }
   }
 
   /**
@@ -357,11 +431,8 @@ export class FlowTrainingSession {
 
   /**
    * Extend the evidence timeline up to the current event index by walking the
-   * event clock from the last covered point. Deterministic: the signature at
-   * index i depends only on events 0..i, so any navigation path (step, seek,
-   * restart, replay) yields the same entries for the same index. Only ever
-   * called on the event clock — never inside the controller's hot path more
-   * than once per index transition.
+   * event clock lazily from the nearest covered checkpoint or last covered point.
+   * Deterministic: the signature at index i depends only on events 0..i.
    */
   private ensureTimeline(): void {
     const target = this.training.eventIndex;
@@ -371,19 +442,31 @@ export class FlowTrainingSession {
     let signature: Map<string, string>;
     let entries: FlowTimelineEntry[];
     let lastAt: Map<string, number>;
+
     if (this.timelineCache) {
-      index = this.timelineCache.maxIndex;
-      signature = this.timelineCache.signature;
-      entries = this.timelineCache.entries;
-      lastAt = this.timelineCache.lastAt;
-      this.training.seekTo(index);
+      const nearest = this.training.checkpointManager.findNearest(target);
+      const cpIndex = nearest ? nearest.eventIndex : 0;
+      if (this.timelineCache.maxIndex < cpIndex) {
+        index = cpIndex;
+        entries = this.timelineCache.entries;
+        lastAt = this.timelineCache.lastAt;
+        this.training.seekTo(cpIndex);
+        signature = FlowTrainingSession.signatureOf(recognizeFlow(this.training.snapshot()));
+      } else {
+        index = this.timelineCache.maxIndex;
+        signature = this.timelineCache.signature;
+        entries = this.timelineCache.entries;
+        lastAt = this.timelineCache.lastAt;
+        this.training.seekTo(index);
+      }
     } else {
-      index = 0;
+      const nearest = this.training.checkpointManager.findNearest(target);
+      const cpIndex = nearest ? nearest.eventIndex : 0;
+      index = cpIndex;
       signature = new Map<string, string>();
       entries = [];
       lastAt = new Map<string, number>();
-      this.training.seekTo(0);
-      // Seed the signature at event 0 so the first diff is well-defined.
+      this.training.seekTo(cpIndex);
       signature = FlowTrainingSession.signatureOf(recognizeFlow(this.training.snapshot()));
     }
 
