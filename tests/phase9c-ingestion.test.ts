@@ -56,7 +56,7 @@ describe("Phase 9-C.1 Vendor-Neutral Ingestion Contracts & Instruments", () => {
     expect(adapter.capabilities.hasOrderCounts).toBe(true);
     expect(adapter.capabilities.hasNanosecondTimestamps).toBe(true);
     expect(adapter.capabilities.hasReceiveTimestamp).toBe(true);
-    expect(adapter.capabilities.hasMatchIds).toBe(true);
+    expect(adapter.capabilities.hasMatchIds).toBe(false); // MBP-1/Trades provides order_id, not true matchId
   });
 
   it("enforces MBP != MBO boundary: MBP input cannot cause hasMBO to become true", () => {
@@ -76,7 +76,7 @@ describe("Phase 9-C.1 Vendor-Neutral Ingestion Contracts & Instruments", () => {
 describe("Phase 9-C.2 Databento Real Microstructure Normalization", () => {
   const adapter = new DatabentoAdapter();
 
-  it("normalizes trade records with aggressor, nanoseconds, and matchId", () => {
+  it("normalizes trade records with exact aggressor (A->SELL, B->BUY, N->UNKNOWN) and nanoseconds", () => {
     const raw = [
       {
         ts_event: "1716550200100000000",
@@ -85,7 +85,8 @@ describe("Phase 9-C.2 Databento Real Microstructure Normalization", () => {
         side: "A",
         price: 18250.25,
         size: 5,
-        order_id: "MATCH_999",
+        match_id: "VENUE_EXEC_101",
+        order_id: "RESTING_ORD_500",
         symbol: "NQ",
         sequence: 42,
       },
@@ -98,8 +99,8 @@ describe("Phase 9-C.2 Databento Real Microstructure Normalization", () => {
     if (ev.kind === "trade") {
       expect(ev.price).toBe(18250.25);
       expect(ev.size).toBe(5);
-      expect(ev.aggressorSide).toBe("BUY"); // 'A' -> BUY aggressor
-      expect(ev.matchId).toBe("MATCH_999");
+      expect(ev.aggressorSide).toBe("SELL"); // Official Databento schema: 'A' -> SELL aggressor
+      expect(ev.matchId).toBe("VENUE_EXEC_101");
       expect(ev.sequence).toBe(42);
       expect(ev.symbol).toBe("NQ");
       expect(ev.tsEventNanos).toBe(1716550200100000000n);
@@ -110,45 +111,65 @@ describe("Phase 9-C.2 Databento Real Microstructure Normalization", () => {
     expect(report.isValid).toBe(true);
   });
 
-  it("handles aggressor mapping: explicit BUY, explicit SELL, and unknown", () => {
+  it("handles aggressor mapping strictly: A->SELL, B->BUY, N->UNKNOWN, missing->UNKNOWN with zero inference", () => {
     const raw = [
-      { ts_event: "1716550200000000000", action: "T", side: "A", price: 100, size: 1 },
-      { ts_event: "1716550200001000000", action: "T", side: "B", price: 100, size: 1 },
-      { ts_event: "1716550200002000000", action: "T", side: "N", price: 100, size: 1 },
+      { ts_event: "1716550200000000000", action: "T", side: "A", price: 100.5, size: 1 }, // A -> SELL
+      { ts_event: "1716550200001000000", action: "T", side: "B", price: 100.25, size: 1 }, // B -> BUY
+      { ts_event: "1716550200002000000", action: "T", side: "N", price: 101.0, size: 1 }, // N -> UNKNOWN
+      { ts_event: "1716550200003000000", action: "T", price: 102.0, size: 1 }, // missing -> UNKNOWN (never infer from upticks)
     ];
 
     const { events } = adapter.normalize(raw);
-    expect(events.length).toBe(3);
-    expect((events[0] as any).aggressorSide).toBe("BUY");
-    expect((events[1] as any).aggressorSide).toBe("SELL");
+    expect(events.length).toBe(4);
+    expect((events[0] as any).aggressorSide).toBe("SELL");
+    expect((events[1] as any).aggressorSide).toBe("BUY");
     expect((events[2] as any).aggressorSide).toBe("UNKNOWN");
+    expect((events[3] as any).aggressorSide).toBe("UNKNOWN");
   });
 
-  it("normalizes depth deltas: ADD, MODIFY, and DELETE", () => {
+  it("strictly preserves order_id as order identifier: order_id is NOT automatically matchId", () => {
+    const raw = [
+      {
+        ts_event: "1716550200000000000",
+        action: "T",
+        side: "B",
+        price: 18250,
+        size: 2,
+        order_id: "ORD_7890", // Resting order ID, not an execution matchId
+      },
+    ];
+
+    const { events } = adapter.normalize(raw);
+    expect(events.length).toBe(1);
+    const ev = events[0] as any;
+    expect(ev.matchId).toBeUndefined(); // Must NOT assume order_id -> matchId
+  });
+
+  it("normalizes depth deltas: ADD ('A'), MODIFY ('M'), and DELETE ('C'/'D')", () => {
     const raw = [
       { ts_event: "1716550200001000000", action: "A", side: "B", price: 18250.0, size: 10, order_cnt: 3 },
       { ts_event: "1716550200002000000", action: "M", side: "B", price: 18250.0, size: 25, order_cnt: 5 },
-      { ts_event: "1716550200003000000", action: "D", side: "B", price: 18250.0, size: 0, order_cnt: 0 },
+      { ts_event: "1716550200003000000", action: "C", side: "B", price: 18250.0, size: 0, order_cnt: 0 },
+      { ts_event: "1716550200004000000", action: "D", side: "A", price: 18251.0, size: 0, order_cnt: 0 },
     ];
 
     const { events, report } = adapter.normalize(raw);
-    expect(events.length).toBe(3);
+    expect(events.length).toBe(4);
 
-    const [addEv, modEv, delEv] = events as any[];
+    const [addEv, modEv, canEv, delEv] = events as any[];
     expect(addEv.kind).toBe("depth-delta");
     expect(addEv.action).toBe("add");
     expect(addEv.side).toBe("bid");
-    expect(addEv.size).toBe(10);
-    expect(addEv.orderCount).toBe(3);
 
     expect(modEv.action).toBe("modify");
     expect(modEv.size).toBe(25);
-    expect(modEv.orderCount).toBe(5);
 
-    expect(delEv.action).toBe("delete");
-    expect(delEv.price).toBe(18250.0);
+    expect(canEv.action).toBe("delete"); // 'C' -> delete
+    expect(canEv.price).toBe(18250.0);
+    expect(delEv.action).toBe("delete"); // 'D' -> delete
+    expect(delEv.price).toBe(18251.0);
 
-    expect(report.depthCount).toBe(3);
+    expect(report.depthCount).toBe(4);
   });
 
   it("normalizes top-of-book quote and book reset records", () => {

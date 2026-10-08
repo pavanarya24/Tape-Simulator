@@ -34,9 +34,9 @@ REAL DATA SOURCE (JSON / JSONL / CSV / Stream)
    - Parses CME Globex futures market data (MDP 3.0, MBP-1, MBP-10, Trades schema).
    - Ingests JSONL strings, arrays of record objects, or JSON files.
    - Dual nanosecond timestamps (`ts_event`, `ts_recv`).
-   - Maps CME aggressor actions (`action: 'T'`, `side: 'A'` -> `BUY`, `side: 'B'` -> `SELL`).
+   - Maps CME trade aggressor actions strictly (`action: 'T'`, `side: 'A'` -> `SELL`, `side: 'B'` -> `BUY`, `side: 'N'`/missing -> `UNKNOWN` without heuristics).
    - Maps depth actions (`action: 'A'` -> `add`, `'M'` -> `modify`, `'D'`/`'C'` -> `delete`, `'R'` -> `book-reset`).
-   - Preserves CME Globex match / execution identifiers (`order_id` -> `matchId`).
+   - Strictly keeps `order_id` distinct as a resting order identifier; only maps genuine venue match/trade identifiers (`match_id`, `trade_id`) to `matchId`.
    - Preserves resting order counts per level (`order_cnt` -> `orderCount`).
 
 2. **GenericMicrostructureAdapter (`src/flow/ingest/generic.ts`)**:
@@ -55,8 +55,8 @@ REAL DATA SOURCE (JSON / JSONL / CSV / Stream)
 | **Packet Receive Nanos** | YES | Preserved in `tsRecvNanos: bigint` when provided by vendor |
 | **Sequence Number** | YES | Preserved from feed sequence or deterministic sequence |
 | **Trade Price & Size** | YES | Finite positive numbers enforced by validator |
-| **Trade Aggressor** | YES | Explicit vendor side mapped ('A'->BUY, 'B'->SELL); else `UNKNOWN` |
-| **Match / Order ID** | YES | Preserved in `matchId` when provided |
+| **Trade Aggressor** | YES | Explicit vendor side mapped ('A'->SELL, 'B'->BUY, 'N'/missing->`UNKNOWN`); zero heuristics |
+| **Match ID** | CONDITIONAL | Populated only when genuine execution ID (`match_id`/`trade_id`) is present; `order_id` is kept separate |
 | **L2 Depth Deltas** | YES | `add`, `modify`, `delete` actions with price, size, orderCount |
 | **Snapshot Conversion** | YES | `SnapshotDeltaConverter` converts L2 snapshots to incremental deltas |
 | **Book Reset** | YES | `BookResetEvent` clears DOM book cleanly |

@@ -51,8 +51,12 @@ export interface DatabentoRawRecord {
   order_cnt?: number;
   /** Event sequence number from CME Globex. */
   sequence?: number;
-  /** Order or match identifier. */
+  /** Resting order identifier (MBP/MBO). Distinct from trade execution matchId. */
   order_id?: string | number;
+  /** Explicit venue execution/trade match identifier if provided. */
+  match_id?: string | number;
+  /** Trade identifier alias if provided. */
+  trade_id?: string | number;
   /** Contract or product symbol (e.g. "NQ", "NQM4", "ES"). */
   symbol?: string;
   /** Top-of-book fields for MBP-1 / BBO records. */
@@ -74,7 +78,7 @@ export class DatabentoAdapter implements MarketDataAdapter<string | DatabentoRaw
     hasOrderCounts: true,
     hasNanosecondTimestamps: true,
     hasReceiveTimestamp: true,
-    hasMatchIds: true,
+    hasMatchIds: false, // Standard Databento MBP-1/Trades schemas supply order_id, not a trade match ID
   };
 
   /**
@@ -153,7 +157,12 @@ export class DatabentoAdapter implements MarketDataAdapter<string | DatabentoRaw
           aggressorSide: aggressor,
           tsEventNanos: tsNanos,
           tsRecvNanos: recvNanos,
-          matchId: rec.order_id !== undefined ? String(rec.order_id) : undefined,
+          matchId:
+            rec.match_id !== undefined
+              ? String(rec.match_id)
+              : rec.trade_id !== undefined
+              ? String(rec.trade_id)
+              : undefined,
         };
         if (validator.validateEvent(tradeEv, i)) {
           events.push(tradeEv);
@@ -238,8 +247,12 @@ export class DatabentoAdapter implements MarketDataAdapter<string | DatabentoRaw
   private mapAggressor(side?: string): Aggressor {
     if (!side) return "UNKNOWN";
     const s = side.trim().toUpperCase();
-    if (s === "A" || s === "BUY" || s === "B_AGG") return "BUY";
-    if (s === "B" || s === "SELL" || s === "A_AGG") return "SELL";
+    // Databento official trade side semantics:
+    // 'A' = Ask (seller aggressed the resting bid / trade on ask side) -> SELL aggressor
+    // 'B' = Bid (buyer aggressed the resting ask / trade on bid side) -> BUY aggressor
+    // 'N' / missing / other -> UNKNOWN (never infer from tick or price movement)
+    if (s === "A") return "SELL";
+    if (s === "B") return "BUY";
     return "UNKNOWN";
   }
 

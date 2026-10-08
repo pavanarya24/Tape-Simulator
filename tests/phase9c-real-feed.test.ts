@@ -116,7 +116,7 @@ describe("Phase 9-C Databento CME NQ Fixture Replay & Integration", () => {
     expect(feed.validationReport?.rejectedRecords.length).toBe(0);
   });
 
-  it("replays real trades into Tape without duplicates or drops", () => {
+  it("replays real trades into Tape without duplicates or drops, keeping order_id distinct from matchId", () => {
     const feed = makeFeed();
     const engine = new TrainingEngine(feed, null);
     engine.stepForward(feed.totalEvents());
@@ -124,14 +124,21 @@ describe("Phase 9-C Databento CME NQ Fixture Replay & Integration", () => {
     const snap = engine.snapshot();
     expect(snap.orderFlow.tape.length).toBeGreaterThan(0);
 
-    // Verify chronological order (stored oldest to newest) and matchIds
+    // Verify chronological order (stored oldest to newest)
     for (let i = 1; i < snap.orderFlow.tape.length; i++) {
       expect(snap.orderFlow.tape[i].timestamp).toBeGreaterThanOrEqual(snap.orderFlow.tape[i - 1].timestamp);
     }
 
-    const tradePrints = snap.orderFlow.tape.filter((t) => t.matchId !== undefined);
-    expect(tradePrints.length).toBeGreaterThan(0);
-    expect(tradePrints[0].matchId).toContain("CME_M_");
+    // Since databento_cme_nq provides order_id (resting order ID), matchId is properly undefined (never fabricated)
+    for (const trade of snap.orderFlow.tape) {
+      expect(trade.matchId).toBeUndefined();
+    }
+
+    // Verify trade sides are accurately mapped: line 13 has side 'B' -> BUY aggressor
+    const firstTrade = snap.orderFlow.tape[0];
+    expect(firstTrade.price).toBe(18250.25);
+    expect(firstTrade.size).toBe(5);
+    expect(firstTrade.aggressorSide).toBe("BUY");
   });
 
   it("replays depth deltas and updates DOM book and liquidity", () => {
@@ -290,7 +297,7 @@ describe("Phase 9-C Multi-Vendor Architecture Validation", () => {
     const genericAdapter = new GenericMicrostructureAdapter();
 
     const databentoRecords = [
-      { ts_event: "1716550200000000000", action: "T", side: "A", price: 100, size: 2, sequence: 1 },
+      { ts_event: "1716550200000000000", action: "T", side: "B", price: 100, size: 2, sequence: 1 },
     ];
     const genericRecords: GenericMicrostructureRecord[] = [
       { time: 1716550200000, type: "trade", side: "buy", px: 100, sz: 2, seq: 1 },
