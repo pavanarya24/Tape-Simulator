@@ -1119,6 +1119,9 @@ export class TapeLabController {
     this.flowTruth = generated.truth;
     this.flowRevealed = false;
     this.flowHeld = false;
+    this.flowPrevBook = null;
+    this.flowPrevIndex = -1;
+    this.flowBookChanges = [];
     // A fresh scenario starts blind: a post-reveal REVIEW selection never
     // carries over to a scenario the trader has not seen yet.
     if (this.flowReplayMode === "REVIEW") this.flowReplayMode = "LIVE";
@@ -1146,6 +1149,9 @@ export class TapeLabController {
     this.flowTruth = null;
     this.flowRevealed = false;
     this.flowHeld = false;
+    this.flowPrevBook = null;
+    this.flowPrevIndex = -1;
+    this.flowBookChanges = [];
     if (this.flowReplayMode === "REVIEW") this.flowReplayMode = "LIVE";
     this.flowSession.warmup(Math.min(FLOW_WARMUP, feed.totalEvents()));
     this.flowScheduler.reset();

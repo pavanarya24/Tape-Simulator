@@ -164,4 +164,27 @@ describe("Phase 10-E — MarketProfile UI Integration & Workspace", () => {
     expect(ids).toContain("BINANCE:BTCUSDT-SPOT");
     expect(ids).toContain("BINANCE:BTCUSDT-FUTURES");
   });
+
+  test("9. Switching markets cleanly resets session, position, and book tracking", () => {
+    const c = new TapeLabController();
+    c.setFlowProfile("CME:NQ");
+    c.generateFlowScenario("spring");
+
+    // Open a long position in NQ
+    c.flowBuy();
+    let state = c.getState();
+    expect(state.flow.position.side).toBe("LONG");
+    expect(state.flow.position.quantity).toBe(1);
+
+    // Switch market to Binance Spot
+    c.setFlowProfile("BINANCE:BTCUSDT-SPOT");
+    state = c.getState();
+
+    // Verify session regenerated with a fresh flat position
+    expect(state.flow.profile.id).toBe("BINANCE:BTCUSDT-SPOT");
+    expect(state.flow.position.side).toBe("FLAT");
+    expect(state.flow.position.quantity).toBe(0);
+    expect(state.flow.position.realizedPnL).toBe(0);
+    expect(state.flow.position.unrealizedPnL).toBe(0);
+  });
 });
