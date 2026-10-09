@@ -187,4 +187,28 @@ describe("Phase 10-E — MarketProfile UI Integration & Workspace", () => {
     expect(state.flow.position.realizedPnL).toBe(0);
     expect(state.flow.position.unrealizedPnL).toBe(0);
   });
+
+  test("10. Profile switching resets replay progress and clears DOM diffs repeatedly", () => {
+    const c = new TapeLabController();
+    c.generateFlowScenario("spring");
+    c.stepFlow(8);
+
+    let state = c.getState().flow;
+    expect(state.eventIndex).toBe(68);
+    expect(state.bookChanges.length).toBeGreaterThan(0);
+
+    for (const profileId of ["CME:ES", "BINANCE:BTCUSDT-SPOT", "BINANCE:BTCUSDT-FUTURES", "CME:NQ"]) {
+      c.setFlowProfile(profileId);
+      state = c.getState().flow;
+
+      expect(state.profile.id).toBe(profileId);
+      expect(state.eventIndex).toBe(0);
+      expect(state.atStart).toBe(true);
+      expect(state.bookChanges).toEqual([]);
+      expect(state.position.side).toBe("FLAT");
+
+      c.stepFlow(1);
+      expect(c.getState().flow.eventIndex).toBe(1);
+    }
+  });
 });

@@ -349,6 +349,14 @@ export class TapeLabController {
   private flowBookChanges: BookChange[] = [];
   private flowScheduler = new SnapshotPublicationScheduler();
 
+  /** Establish an empty diff baseline for the session's current book. */
+  private clearFlowBookTracking(): void {
+    const snapshot = this.flowSession?.snapshot();
+    this.flowPrevBook = snapshot?.book ?? null;
+    this.flowPrevIndex = snapshot?.eventIndex ?? -1;
+    this.flowBookChanges = [];
+  }
+
   constructor() {
     this.flowScheduler.setPublishCallback(() => {
       this.notify();
@@ -997,7 +1005,11 @@ export class TapeLabController {
     // restart) reports the whole visible book as new. Presentation only —
     // the deterministic book the engine builds is never touched.
     const book = snap.book;
-    if (snap.eventIndex === this.flowPrevIndex + 1 || snap.eventIndex === this.flowPrevIndex - 1) {
+    if (snap.eventIndex === this.flowPrevIndex) {
+      // Reading the same snapshot must not recreate a full-book NEW diff.
+      // This is especially important after a profile reset, whose baseline
+      // intentionally starts with no highlights.
+    } else if (snap.eventIndex === this.flowPrevIndex + 1 || snap.eventIndex === this.flowPrevIndex - 1) {
       this.flowBookChanges = diffBook(this.flowPrevBook, book);
     } else {
       this.flowBookChanges = diffBook(null, book);
@@ -1081,6 +1093,13 @@ export class TapeLabController {
     if (this.flowSession) {
       this.flowSession.setOrderQty(profile.units.minOrderQuantity);
       this.generateFlowScenario(this.flowPattern);
+      // Profile changes are a clean session boundary, not a warm restart.
+      // Regeneration warms the tape for normal scenario starts, so rewind
+      // this newly-created session to event zero for the selector path.
+      this.flowSession.reset();
+      this.clearFlowBookTracking();
+      this.flowScheduler.reset();
+      this.flowScheduler.flush();
     } else {
       this.notify();
     }
@@ -1126,6 +1145,7 @@ export class TapeLabController {
     // carries over to a scenario the trader has not seen yet.
     if (this.flowReplayMode === "REVIEW") this.flowReplayMode = "LIVE";
     this.flowSession.warmup(FLOW_WARMUP);
+    this.clearFlowBookTracking();
     this.flowScheduler.reset();
     this.flowScheduler.flush();
   }
@@ -1154,6 +1174,7 @@ export class TapeLabController {
     this.flowBookChanges = [];
     if (this.flowReplayMode === "REVIEW") this.flowReplayMode = "LIVE";
     this.flowSession.warmup(Math.min(FLOW_WARMUP, feed.totalEvents()));
+    this.clearFlowBookTracking();
     this.flowScheduler.reset();
     this.flowScheduler.flush();
   }
@@ -1261,6 +1282,7 @@ export class TapeLabController {
     if (!session) return;
     session.reset();
     this.flowHeld = false;
+    this.clearFlowBookTracking();
     this.flowScheduler.reset();
     this.flowScheduler.flush();
   }
@@ -1312,6 +1334,7 @@ export class TapeLabController {
     if (!session) return;
     session.restart(FLOW_WARMUP);
     this.flowHeld = false;
+    this.clearFlowBookTracking();
     this.flowScheduler.reset();
     this.flowScheduler.flush();
   }
@@ -1322,6 +1345,7 @@ export class TapeLabController {
     const session = this.flowSession;
     if (!session) return false;
     const ok = session.replayFromStart();
+    this.clearFlowBookTracking();
     this.flowScheduler.reset();
     this.flowScheduler.flush();
     return ok;
