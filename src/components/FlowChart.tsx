@@ -27,6 +27,7 @@ import {
 import type { VolumeAtPrice } from "../flow/orderFlow";
 import type { FlowAnnotation, FlowAnnotationType } from "../flow/recognition";
 import { compact, price as fmtPrice } from "../util/format";
+import type { MarketProfile } from "../market/profile";
 
 /** A completed trade drawn on the chart in REVIEW mode (spec §8D.2). */
 export interface FlowChartTrade {
@@ -63,6 +64,8 @@ interface FlowChartProps {
   showTradeMarkers?: boolean;
   /** BAR_CONTEXT: coarser candle aggregation, still no future events. */
   coarseContext?: boolean;
+  /** Active market profile for price precision, tick sizing and quote currency */
+  marketProfile?: Readonly<MarketProfile>;
 }
 
 /* -------------------------------------------------------------------------
@@ -772,7 +775,7 @@ function FlowChartInner(props: FlowChartProps) {
     const chart = createChart(wrap, getProfessionalChartOptions(width, height));
     chartRef.current = chart;
 
-    const candleSeries = chart.addSeries(CandlestickSeries, getCandlestickSeriesOptions());
+    const candleSeries = chart.addSeries(CandlestickSeries, getCandlestickSeriesOptions(props.marketProfile));
     candleSeriesRef.current = candleSeries;
 
     const markersPlugin = createSeriesMarkers(candleSeries);
@@ -823,6 +826,16 @@ function FlowChartInner(props: FlowChartProps) {
     const chart = chartRef.current;
     const wrap = wrapRef.current;
     if (!candleSeries || !vwapSeries || !amaSeries || !chart || !wrap) return;
+
+    if (props.marketProfile) {
+      candleSeries.applyOptions({
+        priceFormat: {
+          type: "price",
+          precision: props.marketProfile.pricing.pricePrecision,
+          minMove: props.marketProfile.pricing.tickSize,
+        },
+      });
+    }
 
     if (props.priceSeries.length === 0) {
       candleSeries.setData([]);
@@ -909,6 +922,7 @@ function FlowChartInner(props: FlowChartProps) {
       candles: adaptedCandles,
       rawCandles,
       bucketMs,
+      currency: props.marketProfile?.units.quoteCurrency ?? "USD",
       isBlind: props.trades === null,
     });
     seriesMarkersRef.current?.setMarkers(adaptedMarkers);

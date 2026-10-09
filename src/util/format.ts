@@ -18,6 +18,28 @@ export function signedMoney(n: number | undefined, digits = 2): string {
   })}`;
 }
 
+export function formatCurrency(n: number | undefined, currency = "USD", digits = 2): string {
+  if (n === undefined || !Number.isFinite(n)) return "—";
+  const sign = n < 0 ? "-" : "";
+  const prefix = currency === "USD" ? "$" : "";
+  const suffix = currency !== "USD" ? ` ${currency}` : "";
+  return `${sign}${prefix}${Math.abs(n).toLocaleString("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })}${suffix}`;
+}
+
+export function formatSignedCurrency(n: number | undefined, currency = "USD", digits = 2): string {
+  if (n === undefined || !Number.isFinite(n)) return "—";
+  const sign = n > 0 ? "+" : n < 0 ? "-" : "";
+  const prefix = currency === "USD" ? "$" : "";
+  const suffix = currency !== "USD" ? ` ${currency}` : "";
+  return `${sign}${prefix}${Math.abs(n).toLocaleString("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })}${suffix}`;
+}
+
 export function price(n: number | undefined, digits = 2): string {
   if (n === undefined || !Number.isFinite(n)) return "—";
   return n.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
