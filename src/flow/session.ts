@@ -24,7 +24,6 @@
  */
 
 import type { ContractSpec } from "../market/types";
-import { CONTRACTS } from "../market/instruments";
 import type { MarketProfile } from "../market/profile";
 import { PROFILE_CME_NQ } from "../market/registry";
 import type { MarketDataFeed } from "./feed";
@@ -33,9 +32,7 @@ import { TIME_STEP_MS, type FlowStepUnit } from "./replay";
 import { TrainingEngine, type TrainingSnapshot, type SeekMetrics } from "./training";
 import type { CheckpointManager } from "./checkpointManager";
 import {
-  DEFAULT_FLOW_COSTS,
   DEFAULT_FLOW_DECISION,
-  DEFAULT_FLOW_RISK,
   FlowExecutionEngine,
   type FlowCosts,
   type FlowDecision,
@@ -214,9 +211,10 @@ export class FlowTrainingSession {
     this.sessionId = opts.sessionId ?? "flow-session";
     this.difficulty = opts.difficulty ?? "INTERMEDIATE";
     this.exec = new FlowExecutionEngine({
-      contract: opts.contract ?? CONTRACTS.NQ,
-      costs: opts.costs ?? DEFAULT_FLOW_COSTS,
-      risk: opts.risk ?? DEFAULT_FLOW_RISK,
+      profile: this.profile,
+      contract: opts.contract,
+      costs: opts.costs,
+      risk: opts.risk,
     });
   }
 
@@ -570,7 +568,15 @@ export class FlowTrainingSession {
   }
 
   setOrderQty(qty: number): void {
-    this.orderQty = Math.max(1, Math.floor(qty));
+    if (this.profile.units.quantityPrecision === 0) {
+      this.orderQty = Math.max(this.profile.units.minOrderQuantity, Math.floor(qty));
+    } else {
+      const step = this.profile.units.quantityStep;
+      const min = this.profile.units.minOrderQuantity;
+      const factor = Math.pow(10, this.profile.units.quantityPrecision);
+      const rounded = Math.max(min, Math.round(qty / step) * step);
+      this.orderQty = Math.round(rounded * factor) / factor;
+    }
   }
 
   setDecision(patch: Partial<FlowDecision>): void {
@@ -620,6 +626,7 @@ export class FlowTrainingSession {
       records: this.records(),
       decision: this.decision,
       risk: this.exec.riskConfig,
+      profile: this.profile,
       contract: this.exec.contract,
       orderFlow: snap.orderFlow,
       dom: snap.dom,

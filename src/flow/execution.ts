@@ -26,8 +26,9 @@
  * nothing here changes terminal replay behaviour.
  */
 
-import { CONTRACTS } from "../market/instruments";
-import type { ContractSpec } from "../market/types";
+import { PROFILE_CME_NQ, PROFILE_CME_ES } from "../market/registry";
+import type { FeeModel, MarketProfile, MarketProfileUnits } from "../market/profile";
+import type { ContractId, ContractSpec, RootSymbol } from "../market/types";
 import type { FlowScenarioId } from "./scenarios";
 
 /* ------------------------------ decision ------------------------------ */
@@ -62,8 +63,12 @@ export const FLOW_BIASES: readonly FlowBias[] = ["LONG", "SHORT", "NEUTRAL"];
 
 /** Simulated transaction costs. NOT real brokerage costs. */
 export interface FlowCosts {
-  /** Simulated commission in dollars, charged per contract per fill. */
-  commissionPerContract: number;
+  /** Optional fee model override ("per_contract_fixed" | "basis_points_notional"). Defaults to profile.execution.defaultFeeModel. */
+  feeModel?: FeeModel;
+  /** Simulated commission in dollars/quote currency per contract/unit (used for per_contract_fixed). */
+  commissionPerContract?: number;
+  /** Simulated fee rate (e.g. 0.0005 for 5 bps; used for basis_points_notional). */
+  feeRate?: number;
   /** Simulated slippage in ticks, charged adversely per fill. */
   slippageTicks: number;
 }
@@ -80,13 +85,13 @@ export const DEFAULT_FLOW_COSTS: FlowCosts = {
 /* -------------------------------- risk -------------------------------- */
 
 export interface FlowRisk {
-  /** Maximum contracts that may be held at once. */
+  /** Maximum units/contracts that may be held at once. */
   maxPositionQty: number;
-  /** Block new entries once session net realized P&L ≤ −maxDailyLoss. Null = off. */
+  /** Block new entries once session net realized P&L <= -maxDailyLoss. Null = off. */
   maxDailyLoss: number | null;
-  /** Optional stop, in ticks from average entry (null/≤0 = off). */
+  /** Optional stop, in ticks from average entry (null/<=0 = off). */
   stopLossTicks: number | null;
-  /** Optional take-profit, in ticks from average entry (null/≤0 = off). */
+  /** Optional take-profit, in ticks from average entry (null/<=0 = off). */
   takeProfitTicks: number | null;
 }
 
@@ -119,14 +124,14 @@ export interface FlowMarketState {
 
 export interface FlowFill {
   action: "BUY" | "SELL";
-  /** Exact book price used (BUY→ask, SELL→bid). Never invented. */
+  /** Exact book price used (BUY->ask, SELL->bid). Never invented. */
   price: number;
   quantity: number;
   timestamp: number;
   sequence: number;
-  /** Simulated commission charged on this fill (dollars). */
+  /** Simulated commission charged on this fill (quote currency). */
   commission: number;
-  /** Simulated slippage charged on this fill (dollars). */
+  /** Simulated slippage charged on this fill (quote currency). */
   slippageCost: number;
 }
 
@@ -152,6 +157,8 @@ export interface FlowClosedTrade {
   exitReason: FlowExitReason;
   /** Decision snapshot captured when the position was first opened. */
   entryDecision: FlowDecision;
+  /** Currency the PnL and costs are settled in */
+  currency?: string;
 }
 
 export type FlowExecResult =
@@ -200,7 +207,7 @@ interface OpenPosition {
   entryTimestamp: number;
   entrySequence: number;
   entryDecision: FlowDecision;
-  /** Entry-fill costs (commission + slippage) accrued in dollars. */
+  /** Entry-fill costs (commission + slippage) accrued in quote currency. */
   entryCosts: number;
   mfe: number;
   mae: number;
@@ -214,16 +221,100 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+function roundQuantity(qty: number, precision: number): number {
+  if (precision === 0) return Math.round(qty);
+  const factor = Math.pow(10, precision);
+  return Math.round(qty * factor) / factor;
+}
+
+/**
+ * Validates order quantity against MarketProfileUnits constraints:
+ *  - Minimum quantity
+ *  - Step increment alignment
+ *  - Integer vs fractional precision constraints
+ */
+export function validateOrderQuantity(qty: number, units: MarketProfileUnits): boolean {
+  if (typeof qty !== "number" || !Number.isFinite(qty) || qty <= 0) {
+    return false;
+  }
+
+  if (units.quantityPrecision === 0) {
+    if (!Number.isInteger(qty) || qty < units.minOrderQuantity || qty % units.quantityStep !== 0) {
+      return false;
+    }
+    return true;
+  }
+
+  // Fractional quantities (e.g. Crypto)
+  if (qty < units.minOrderQuantity - 1e-9) {
+    return false;
+  }
+
+  const factor = Math.pow(10, units.quantityPrecision);
+  const scaled = qty * factor;
+  if (Math.abs(scaled - Math.round(scaled)) > 1e-5) {
+    return false;
+  }
+
+  const qtyUnits = Math.round(scaled);
+  const stepUnits = Math.round(units.quantityStep * factor);
+
+  if (qtyUnits <= 0 || stepUnits <= 0 || qtyUnits % stepUnits !== 0) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Calculates gross PnL for a position or fill based on the MarketProfile's pnlModel.
+ *
+ * Models:
+ *  - point_multiplier: (exit - entry) * direction * multiplier * contracts (in quote currency USD)
+ *  - linear_crypto:    (exit - entry) * direction * multiplier * quantity (in quote currency USDT, multiplier = 1.0)
+ *  - inverse_crypto:   (1/entry - 1/exit) * direction * quantity (in base currency BTC)
+ */
+export function calculateGrossPnL(
+  side: "LONG" | "SHORT",
+  entryPrice: number,
+  exitPrice: number,
+  quantity: number,
+  profile: Readonly<MarketProfile>,
+): number {
+  const dir = side === "LONG" ? 1 : -1;
+  switch (profile.execution.pnlModel) {
+    case "point_multiplier": {
+      return (exitPrice - entryPrice) * dir * profile.execution.contractMultiplier * quantity;
+    }
+    case "linear_crypto": {
+      return (exitPrice - entryPrice) * dir * profile.execution.contractMultiplier * quantity;
+    }
+    case "inverse_crypto": {
+      if (entryPrice <= 0 || exitPrice <= 0) {
+        throw new Error("Invalid price for inverse crypto PnL calculation");
+      }
+      return (1 / entryPrice - 1 / exitPrice) * dir * quantity;
+    }
+    default: {
+      const _exhaustive: never = profile.execution.pnlModel;
+      throw new Error(`Unsupported PnL model: ${_exhaustive}`);
+    }
+  }
+}
+
 /* ------------------------------ the engine ------------------------------ */
 
 export interface FlowExecutionOptions {
+  /** MarketProfile defining instrument truth, multiplier, tick grid, and PnL model */
+  profile?: Readonly<MarketProfile>;
+  /** Legacy ContractSpec for backward compatibility */
   contract?: ContractSpec;
-  costs?: FlowCosts;
-  risk?: FlowRisk;
+  costs?: Partial<FlowCosts>;
+  risk?: Partial<FlowRisk>;
 }
 
 export class FlowExecutionEngine {
-  readonly contract: ContractSpec;
+  readonly profile: Readonly<MarketProfile>;
   private costs: FlowCosts;
   private risk: FlowRisk;
 
@@ -235,9 +326,39 @@ export class FlowExecutionEngine {
   private lastMark: number | null = null;
 
   constructor(opts: FlowExecutionOptions = {}) {
-    this.contract = opts.contract ?? CONTRACTS.NQ;
-    this.costs = { ...opts.costs ?? DEFAULT_FLOW_COSTS };
-    this.risk = { ...opts.risk ?? DEFAULT_FLOW_RISK };
+    if (opts.profile) {
+      this.profile = opts.profile;
+    } else if (opts.contract) {
+      if (opts.contract.root === "ES" || opts.contract.id === "ES") {
+        this.profile = PROFILE_CME_ES;
+      } else {
+        this.profile = PROFILE_CME_NQ;
+      }
+    } else {
+      this.profile = PROFILE_CME_NQ;
+    }
+
+    this.costs = { ...DEFAULT_FLOW_COSTS, ...opts.costs };
+    this.risk = { ...DEFAULT_FLOW_RISK, ...opts.risk };
+  }
+
+  /** Backward-compatible ContractSpec getter */
+  get contract(): ContractSpec {
+    const sym = this.profile.identity.symbol;
+    const isES = sym === "ES" || sym === "MES";
+    const isMNQ = sym === "MNQ";
+    const isMES = sym === "MES";
+    const id: ContractId = isMES ? "MES" : isES ? "ES" : isMNQ ? "MNQ" : "NQ";
+    const root: RootSymbol = isES ? "ES" : "NQ";
+    return {
+      id,
+      root,
+      label: this.profile.identity.label,
+      pointValue: this.profile.execution.contractMultiplier,
+      tickSize: this.profile.pricing.tickSize,
+      tickValue: this.profile.execution.tickValue,
+      currency: "USD",
+    };
   }
 
   /* --------------------------- configuration --------------------------- */
@@ -283,9 +404,9 @@ export class FlowExecutionEngine {
         quantity: 0,
         averageEntryPrice: null,
         currentPrice: this.lastMark,
-        realizedPnL: this.realized,
+        realizedPnL: round2(this.realized),
         unrealizedPnL: 0,
-        totalPnL: this.realized,
+        totalPnL: round2(this.realized),
         entryTimestamp: null,
         exitTimestamp: last ? last.exitTimestamp : null,
         maxFavorableExcursion: last ? last.maxFavorableExcursion : 0,
@@ -293,16 +414,15 @@ export class FlowExecutionEngine {
         costsAccrued: 0,
       };
     }
-    const dir = p.side === "LONG" ? 1 : -1;
     const mark = this.lastMark ?? p.avgEntry;
-    const grossUnrealized = (mark - p.avgEntry) * dir * this.contract.pointValue * p.quantity;
+    const grossUnrealized = calculateGrossPnL(p.side, p.avgEntry, mark, p.quantity, this.profile);
     const unrealized = round2(grossUnrealized - p.entryCosts);
     return {
       side: p.side,
       quantity: p.quantity,
       averageEntryPrice: p.avgEntry,
       currentPrice: this.lastMark,
-      realizedPnL: this.realized,
+      realizedPnL: round2(this.realized),
       unrealizedPnL: unrealized,
       totalPnL: round2(this.realized + unrealized),
       entryTimestamp: p.entryTimestamp,
@@ -335,13 +455,12 @@ export class FlowExecutionEngine {
   private updateExcursion(mark: number): void {
     const p = this.position;
     if (!p) return;
-    const dir = p.side === "LONG" ? 1 : -1;
-    const gross = (mark - p.avgEntry) * dir * this.contract.pointValue * p.quantity;
+    const gross = calculateGrossPnL(p.side, p.avgEntry, mark, p.quantity, this.profile);
     if (gross > p.mfe) p.mfe = round2(gross);
     if (-gross > p.mae) p.mae = round2(-gross);
   }
 
-  /** Stop/target evaluated on the position's EXIT side (long→bid, short→ask). */
+  /** Stop/target evaluated on the position's EXIT side (long->bid, short->ask). */
   private checkProtectiveExits(m: FlowMarketState): FlowExecResult | null {
     const p = this.position;
     if (!p) return null;
@@ -349,16 +468,16 @@ export class FlowExecutionEngine {
     if (exitPrice === null) return null;
     const stop = this.risk.stopLossTicks;
     const target = this.risk.takeProfitTicks;
-    const tick = this.contract.tickSize;
+    const tick = this.profile.pricing.tickSize;
     const long = p.side === "LONG";
     if (stop !== null && stop > 0) {
       const trigger = long ? p.avgEntry - stop * tick : p.avgEntry + stop * tick;
-      const hit = long ? exitPrice <= trigger : exitPrice >= trigger;
+      const hit = long ? exitPrice <= trigger + 1e-9 : exitPrice >= trigger - 1e-9;
       if (hit) return this.close(exitPrice, m, "STOP");
     }
     if (target !== null && target > 0) {
       const trigger = long ? p.avgEntry + target * tick : p.avgEntry - target * tick;
-      const hit = long ? exitPrice >= trigger : exitPrice <= trigger;
+      const hit = long ? exitPrice >= trigger - 1e-9 : exitPrice <= trigger + 1e-9;
       if (hit) return this.close(exitPrice, m, "TARGET");
     }
     return null;
@@ -410,7 +529,9 @@ export class FlowExecutionEngine {
   /* ----------------------------- internals ----------------------------- */
 
   private guardOrder(qty: number): FlowExecResult | null {
-    if (!Number.isInteger(qty) || qty < 1) return reject("INVALID QUANTITY");
+    if (!validateOrderQuantity(qty, this.profile.units)) {
+      return reject("INVALID QUANTITY");
+    }
     const m = this.market;
     if (!m || m.bid === null || m.ask === null) return reject("NO BOOK");
     // Once the session loss limit is hit every new entry / add / reversal is
@@ -420,7 +541,7 @@ export class FlowExecutionEngine {
   }
 
   private open(side: "LONG" | "SHORT", qty: number, price: number, m: FlowMarketState, decision: FlowDecision): FlowExecResult {
-    if (qty > this.risk.maxPositionQty) return reject("MAX POSITION");
+    if (qty > this.risk.maxPositionQty + 1e-9) return reject("MAX POSITION");
     const fill = this.makeFill(side === "LONG" ? "BUY" : "SELL", price, qty, m);
     this.position = {
       side,
@@ -439,10 +560,10 @@ export class FlowExecutionEngine {
   private add(side: "LONG" | "SHORT", qty: number, price: number, m: FlowMarketState, _decision: FlowDecision): FlowExecResult {
     const p = this.position;
     if (!p || p.side !== side) return this.open(side, qty, price, m, _decision);
-    if (p.quantity + qty > this.risk.maxPositionQty) return reject("MAX POSITION");
+    if (p.quantity + qty > this.risk.maxPositionQty + 1e-9) return reject("MAX POSITION");
     const fill = this.makeFill(side === "LONG" ? "BUY" : "SELL", price, qty, m);
     p.avgEntry = (p.avgEntry * p.quantity + price * qty) / (p.quantity + qty);
-    p.quantity += qty;
+    p.quantity = roundQuantity(p.quantity + qty, this.profile.units.quantityPrecision);
     p.entryCosts += fill.commission + fill.slippageCost;
     // The read behind the FIRST entry stays attached to the eventual trade.
     return { ok: true, reason: "FILLED", fills: [fill], closed: null, reversed: false };
@@ -450,12 +571,12 @@ export class FlowExecutionEngine {
 
   /** Opposite-side order: flatten the whole position, then open the other way. */
   private reverse(newSide: "LONG" | "SHORT", qty: number, m: FlowMarketState, decision: FlowDecision): FlowExecResult {
-    if (qty > this.risk.maxPositionQty) return reject("MAX POSITION");
+    if (qty > this.risk.maxPositionQty + 1e-9) return reject("MAX POSITION");
     const p = this.position;
     if (!p) return reject("ALREADY FLAT");
-    const exitPrice = p.side === "LONG" ? m.bid as number : m.ask as number;
+    const exitPrice = p.side === "LONG" ? (m.bid as number) : (m.ask as number);
     const closed = this.close(exitPrice, m, "REVERSE");
-    const openResult = this.open(newSide, qty, newSide === "LONG" ? m.ask as number : m.bid as number, m, decision);
+    const openResult = this.open(newSide, qty, newSide === "LONG" ? (m.ask as number) : (m.bid as number), m, decision);
     if (!openResult.ok) return openResult;
     return { ok: true, reason: "FILLED", fills: [...closed.fills, ...openResult.fills], closed: closed.closed, reversed: true };
   }
@@ -465,9 +586,8 @@ export class FlowExecutionEngine {
     if (!p) return reject("ALREADY FLAT");
     // The exit mark counts toward MFE/MAE before the trade is snapshotted.
     this.updateExcursion(exitPrice);
-    const dir = p.side === "LONG" ? 1 : -1;
     const fill = this.makeFill(p.side === "LONG" ? "SELL" : "BUY", exitPrice, p.quantity, m);
-    const gross = round2((exitPrice - p.avgEntry) * dir * this.contract.pointValue * p.quantity);
+    const gross = round2(calculateGrossPnL(p.side, p.avgEntry, exitPrice, p.quantity, this.profile));
     const costs = round2(p.entryCosts + fill.commission + fill.slippageCost);
     const net = round2(gross - costs);
     const trade: FlowClosedTrade = {
@@ -488,6 +608,7 @@ export class FlowExecutionEngine {
       maxAdverseExcursion: round2(p.mae),
       exitReason: reason,
       entryDecision: p.entryDecision,
+      currency: this.profile.units.quoteCurrency,
     };
     this.closed.push(trade);
     this.realized = round2(this.realized + net);
@@ -496,15 +617,42 @@ export class FlowExecutionEngine {
     return { ok: true, reason: "FILLED", fills: [fill], closed: trade, reversed: false };
   }
 
+  private calculateFillCosts(
+    _action: "BUY" | "SELL",
+    price: number,
+    qty: number,
+  ): { commission: number; slippageCost: number } {
+    const feeModel = this.costs.feeModel ?? this.profile.execution.defaultFeeModel ?? "per_contract_fixed";
+    let commission = 0;
+
+    if (feeModel === "basis_points_notional") {
+      const rate = this.costs.feeRate ?? this.profile.execution.defaultFeeRate ?? 0.0005;
+      const notional = price * qty;
+      commission = round2(notional * rate);
+    } else {
+      // per_contract_fixed
+      const rate = this.costs.commissionPerContract ?? this.profile.execution.defaultFeeRate ?? 2.25;
+      commission = round2(rate * qty);
+    }
+
+    const slippageTicks = this.costs.slippageTicks ?? this.profile.execution.defaultSlippageTicks ?? 1;
+    const tickVal = this.profile.execution.tickValue;
+    const slippageCost = round2(slippageTicks * tickVal * qty);
+
+    return { commission, slippageCost };
+  }
+
   private makeFill(action: "BUY" | "SELL", price: number, qty: number, m: FlowMarketState): FlowFill {
+    const { commission, slippageCost } = this.calculateFillCosts(action, price, qty);
     return {
       action,
       price,
       quantity: qty,
       timestamp: m.timestamp,
       sequence: m.sequence,
-      commission: round2(this.costs.commissionPerContract * qty),
-      slippageCost: round2(this.costs.slippageTicks * this.contract.tickValue * qty),
+      commission,
+      slippageCost,
     };
   }
 }
+
