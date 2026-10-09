@@ -17,6 +17,7 @@ import { buildCandles, pickBucketMs, type FlowCandle, type FlowChartTrade } from
 import type { VolumeAtPrice } from "./orderFlow";
 import type { FlowAnnotation, FlowAnnotationType } from "./recognition";
 import { compact, price as fmtPrice } from "../util/format";
+import type { MarketProfile } from "../market/profile";
 
 /**
  * Standard colors for objective and interpretive Flow Lab chart annotations.
@@ -387,7 +388,7 @@ export function getProfessionalChartOptions(
 /**
  * Candlestick series visual options adhering to Tape Lab up/down tokens.
  */
-export function getCandlestickSeriesOptions(): CandlestickSeriesPartialOptions {
+export function getCandlestickSeriesOptions(profile?: Readonly<MarketProfile>): CandlestickSeriesPartialOptions {
   return {
     upColor: CHART_THEME.up,
     downColor: CHART_THEME.down,
@@ -397,6 +398,13 @@ export function getCandlestickSeriesOptions(): CandlestickSeriesPartialOptions {
     wickVisible: true,
     wickUpColor: CHART_THEME.up,
     wickDownColor: CHART_THEME.down,
+    priceFormat: profile
+      ? {
+          type: "price",
+          precision: profile.pricing.pricePrecision,
+          minMove: profile.pricing.tickSize,
+        }
+      : undefined,
   };
 }
 
@@ -457,6 +465,8 @@ export interface AdaptFlowMarkersOptions {
   candles?: CandlestickData<UTCTimestamp>[];
   rawCandles?: FlowCandle[];
   bucketMs?: number;
+  /** Currency for trade PnL formatting (default "USD") */
+  currency?: string;
   /** Explicit blind-mode flag; when true, trade markers and interpretive labels are strictly rejected */
   isBlind?: boolean;
 }
@@ -561,6 +571,10 @@ export function adaptFlowMarkers(
       ) {
         const isProfitable = tr.netPnL >= 0;
         const isLong = tr.side === "LONG";
+        const cur = options.currency ?? "USD";
+        const pnlText = cur === "USD"
+          ? `${isProfitable ? "+" : "-"}$${Math.abs(tr.netPnL).toFixed(2)}`
+          : `${isProfitable ? "+" : "-"}${Math.abs(tr.netPnL).toFixed(2)} ${cur}`;
         candidates.push({
           rawTime: tr.exitTimestamp,
           priority: 3,
@@ -569,7 +583,7 @@ export function adaptFlowMarkers(
             position: isLong ? "aboveBar" : "belowBar",
             shape: "circle",
             color: isProfitable ? CHART_THEME.up : CHART_THEME.down,
-            text: `${isProfitable ? "+" : "-"}$${Math.abs(tr.netPnL).toFixed(2)}`,
+            text: pnlText,
             id: `exit-${tr.tradeId}`,
             size: 1,
           },

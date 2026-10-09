@@ -95,6 +95,8 @@ export interface FlowSessionSnapshot {
   notice: FlowNotice | null;
   /** Trader-facing trade history; hiddenPattern is null until reveal. */
   trades: FlowTradeView[];
+  /** Market profile defining instrument tick size, units, and models. */
+  profile: Readonly<MarketProfile>;
   /* --- Phase 7B recognition (observable-only; engine answer gated) --- */
   /** Objective current-state observations — safe to show while blind. */
   evidence: FlowEvidence[];
@@ -162,9 +164,11 @@ function annotationTypeFor(metric: string, interpretation: string): FlowAnnotati
  *  threshold flicker while staying fully deterministic (index arithmetic). */
 const TIMELINE_COOLDOWN = 30;
 
-function signed(n: number): string {
+function signed(n: number, currency = "USD"): string {
   const sign = n > 0 ? "+" : n < 0 ? "-" : "";
-  return `${sign}$${Math.abs(n).toFixed(2)}`;
+  const prefix = currency === "USD" ? "$" : "";
+  const suffix = currency !== "USD" ? ` ${currency}` : "";
+  return `${sign}${prefix}${Math.abs(n).toFixed(2)}${suffix}`;
 }
 
 export class FlowTrainingSession {
@@ -539,7 +543,7 @@ export class FlowTrainingSession {
       const t = auto.closed;
       this.notice = {
         ok: true,
-        text: `${t.exitReason} — ${t.side} ${t.quantity} closed @ ${t.exitPrice} · NET ${signed(t.netPnL)}`,
+        text: `${t.exitReason} — ${t.side} ${t.quantity} closed @ ${t.exitPrice} · NET ${signed(t.netPnL, this.profile.units.quoteCurrency)}`,
       };
     }
   }
@@ -549,21 +553,21 @@ export class FlowTrainingSession {
   buy(): FlowExecResult {
     this.sync();
     const result = this.exec.buy(this.orderQty, this.decision);
-    this.notice = describeResult(result, "BUY");
+    this.notice = describeResult(result, "BUY", this.profile.units.quoteCurrency);
     return result;
   }
 
   sell(): FlowExecResult {
     this.sync();
     const result = this.exec.sell(this.orderQty, this.decision);
-    this.notice = describeResult(result, "SELL");
+    this.notice = describeResult(result, "SELL", this.profile.units.quoteCurrency);
     return result;
   }
 
   flatten(): FlowExecResult {
     this.sync();
     const result = this.exec.flatten();
-    this.notice = describeResult(result, "FLATTEN");
+    this.notice = describeResult(result, "FLATTEN", this.profile.units.quoteCurrency);
     return result;
   }
 
@@ -679,6 +683,7 @@ export class FlowTrainingSession {
       risk: this.exec.riskConfig,
       notice: this.notice,
       trades: this.records().map((r) => tradeView(r, this.revealed)),
+      profile: this.profile,
       evidence: recognition.evidence,
       annotations,
       timeline: this.revealed ? visible : [],
@@ -689,7 +694,7 @@ export class FlowTrainingSession {
   }
 }
 
-function describeResult(result: FlowExecResult, action: string): FlowNotice {
+function describeResult(result: FlowExecResult, action: string, currency = "USD"): FlowNotice {
   if (!result.ok) return { ok: false, text: `REJECTED — ${result.reason}` };
   const fill = result.fills[result.fills.length - 1];
   if (result.reversed && result.closed && fill) {
@@ -701,7 +706,7 @@ function describeResult(result: FlowExecResult, action: string): FlowNotice {
   if (result.closed && fill) {
     return {
       ok: true,
-      text: `FLATTENED ${result.closed.side} ${result.closed.quantity} @ ${result.closed.exitPrice} · NET ${signed(result.closed.netPnL)} · SEQ ${fill.sequence}`,
+      text: `FLATTENED ${result.closed.side} ${result.closed.quantity} @ ${result.closed.exitPrice} · NET ${signed(result.closed.netPnL, currency)} · SEQ ${fill.sequence}`,
     };
   }
   if (!fill) return { ok: true, text: `${action} FILLED` };

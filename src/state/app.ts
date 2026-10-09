@@ -103,6 +103,8 @@ import {
 import { computeFlowAnalytics, type FlowAnalytics } from "../flow/analytics";
 import { buildFlowReview, type FlowReview } from "../flow/review";
 import { diffBook, type BookChange, type BookView } from "../flow/domDiff";
+import type { MarketProfile } from "../market/profile";
+import { PROFILE_CME_NQ, requireMarketProfile } from "../market/registry";
 
 /** Opening ranges are defined against the 09:30 America/New_York cash open. */
 const OR_ANCHOR_TZ = "America/New_York";
@@ -133,6 +135,8 @@ export interface PendingPrediction {
  */
 export interface FlowState {
   active: boolean;
+  /** Active MarketProfile defining instrument truth, tick size, units, and models. */
+  profile: Readonly<MarketProfile>;
   source: string;
   isRealData: boolean;
   eventIndex: number;
@@ -214,6 +218,7 @@ const FLOW_IDLE_POSITION: FlowPosition = {
 
 const FLOW_IDLE: FlowState = {
   active: false,
+  profile: PROFILE_CME_NQ,
   source: "Synthetic Training Data",
   isRealData: false,
   eventIndex: 0,
@@ -319,6 +324,9 @@ export class TapeLabController {
   private flowTruth: ScenarioTruth | null = null;
   private flowRevealed = false;
   private flowHeld = false;
+  /** Active MarketProfile for synthetic generation and replay. Defaults to CME:NQ. */
+  private flowProfile: Readonly<MarketProfile> = PROFILE_CME_NQ;
+  private flowPattern: FlowScenarioId | "any" = "any";
   /** Simulated cost/risk settings persist across scenario generations. */
   private flowCosts: FlowCosts = { ...DEFAULT_FLOW_COSTS };
   private flowRisk: FlowRisk = { ...DEFAULT_FLOW_RISK };
@@ -975,7 +983,12 @@ export class TapeLabController {
 
   private flowState(): FlowState {
     const session = this.flowSession;
-    if (!session) return FLOW_IDLE;
+    if (!session) {
+      return {
+        ...FLOW_IDLE,
+        profile: this.flowProfile,
+      };
+    }
     const snap = session.snapshot();
     const effectiveReplayMode = resolveReplayMode(this.flowReplayMode, this.flowRevealed);
     const policy = replayPolicy(effectiveReplayMode, this.flowRevealed);
@@ -993,6 +1006,7 @@ export class TapeLabController {
     this.flowPrevIndex = snap.eventIndex;
     return {
       active: true,
+      profile: snap.profile,
       source: snap.source,
       isRealData: snap.isRealData,
       eventIndex: snap.eventIndex,
@@ -1039,16 +1053,56 @@ export class TapeLabController {
     };
   }
 
+  get currentFlowProfile(): Readonly<MarketProfile> {
+    return this.flowProfile;
+  }
+
+  /**
+   * Set active market profile and adapt simulation costs and order quantity.
+   * If a flow session is active, automatically regenerates for the new market.
+   */
+  setFlowProfile(profileId: string): void {
+    const profile = requireMarketProfile(profileId);
+    if (this.flowProfile.id === profile.id) return;
+    this.flowProfile = profile;
+    if (profile.execution.defaultFeeModel === "basis_points_notional") {
+      this.flowCosts = {
+        ...this.flowCosts,
+        feeModel: "basis_points_notional",
+        feeRate: profile.execution.defaultFeeRate ?? 0.0005,
+      };
+    } else {
+      this.flowCosts = {
+        ...this.flowCosts,
+        feeModel: "per_contract_fixed",
+        commissionPerContract: profile.execution.defaultFeeRate ?? 2.25,
+      };
+    }
+    if (this.flowSession) {
+      this.flowSession.setOrderQty(profile.units.minOrderQuantity);
+      this.generateFlowScenario(this.flowPattern);
+    } else {
+      this.notify();
+    }
+  }
+
   /**
    * Generate a fresh deterministic order-flow scenario. `"any"` picks a random
    * pattern; a specific id generates exactly that pattern. The seed is drawn
    * from wall-clock entropy, but once generated the session is fully
    * deterministic (same id + seed ⇒ identical events and truth).
    */
-  generateFlowScenario(pattern: FlowScenarioId | "any"): void {
+  generateFlowScenario(pattern: FlowScenarioId | "any", profileId?: string): void {
+    if (profileId) {
+      this.flowProfile = requireMarketProfile(profileId);
+    }
+    this.flowPattern = pattern;
     const seed = (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
     const id = pattern === "any" ? pickScenarioId(seed ^ 0x51ed270b) : pattern;
-    const generated = generateScenario(id, seed, { difficulty: this.flowDifficulty });
+    const generated = generateScenario(id, seed, {
+      difficulty: this.flowDifficulty,
+      profile: this.flowProfile,
+    });
     this.flowScenarioSeq++;
     this.flowSession = new FlowTrainingSession(generated.feed, generated.truth, {
       // Neutral instance id: never derived from the seed, so pre-reveal state
@@ -1056,7 +1110,10 @@ export class TapeLabController {
       sessionId: `flow-${this.flowScenarioSeq}`,
       costs: this.flowCosts,
       risk: this.flowRisk,
-      contract: CONTRACTS.NQ,
+      profile: this.flowProfile,
+      contract: this.flowProfile.identity.assetClass === "futures" && this.flowProfile.identity.symbol === "ES"
+        ? CONTRACTS.ES
+        : CONTRACTS.NQ,
       difficulty: this.flowDifficulty,
     });
     this.flowTruth = generated.truth;
@@ -1074,13 +1131,16 @@ export class TapeLabController {
    * Load an external real market data feed (e.g. from Databento CME or generic adapter).
    * Operates safely without synthetic ScenarioTruth, preserving honest isRealData reporting.
    */
-  loadRealFlowFeed(feed: MarketDataFeed, contract: ContractSpec = CONTRACTS.NQ): void {
+  loadRealFlowFeed(feed: MarketDataFeed, contract?: ContractSpec): void {
+    const profile = feed.profile ?? this.flowProfile;
+    this.flowProfile = profile;
     this.flowScenarioSeq++;
     this.flowSession = new FlowTrainingSession(feed, null, {
       sessionId: `real-${this.flowScenarioSeq}`,
       costs: this.flowCosts,
       risk: this.flowRisk,
-      contract,
+      profile,
+      contract: contract ?? (profile.identity.symbol === "ES" ? CONTRACTS.ES : CONTRACTS.NQ),
       difficulty: this.flowDifficulty,
     });
     this.flowTruth = null;

@@ -8,7 +8,9 @@ import { FLOW_DIFFICULTIES, FLOW_SCENARIOS, scenarioName, type FlowDifficulty, t
 import { flowEvidenceLabel } from "../flow/recognition";
 import type { FlowBias, FlowPrediction } from "../flow/execution";
 import type { Level } from "../flow/dom";
-import { money, pct, pnlClass, price as fmtPrice, signedMoney } from "../util/format";
+import { formatCurrency, formatSignedCurrency, pct, pnlClass, price as fmtPrice } from "../util/format";
+import { listMarketProfiles } from "../market/registry";
+import type { MarketProfile } from "../market/profile";
 /* --- Phase 8 modules --- */
 import {
   FLOW_REPLAY_MODES,
@@ -216,12 +218,12 @@ export function FlowPage({ state }: { state: AppState }) {
       </p>
 
       <div className="callout info flow-honesty">
-        <span className="badge mono">SYNTHETIC TRAINING DATA</span>{" "}
-        <span className="badge mono">SIMULATED TRADING — SYNTHETIC MARKET DATA</span>{" "}
+        <span className="badge mono">{flow.isRealData ? "GENUINE MARKET DATA" : "SYNTHETIC TRAINING DATA"}</span>{" "}
+        <span className="badge mono">{flow.isRealData ? "REPLAY VERIFIED" : "SIMULATED TRADING — SYNTHETIC MARKET DATA"}</span>{" "}
         <span className="dim">
-          Every event is generated for practice. No real CME/NQ data, no real liquidity, no real
-          fills — the same architecture is ready for future real feeds (Databento / Rithmic) without
-          changing the training layers.
+          {flow.isRealData
+            ? `Replaying genuine ${flow.profile.identity.label} microstructure from ${flow.profile.identity.venue}. Simulated fills against real book order flow.`
+            : `Every event is generated for practice. Simulated liquidity and fills for ${flow.profile.identity.label} (${flow.profile.identity.venue}) — ready for real historical market feeds without changing the training engine.`}
         </span>
       </div>
 
@@ -233,6 +235,22 @@ export function FlowPage({ state }: { state: AppState }) {
         </div>
         <div className="card-body">
           <div className="flow-header-grid">
+            <div className="field">
+              <label>Market</label>
+              <select
+                value={flow.profile.id}
+                onChange={(e) => {
+                  setPlaying(false);
+                  controller.setFlowProfile(e.target.value);
+                }}
+              >
+                {listMarketProfiles().map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.identity.symbol} ({p.identity.marketType.toUpperCase()})
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="field">
               <label>Scenario</label>
               <select value={pattern} onChange={(e) => setPattern(e.target.value as FlowScenarioId | "any")}>
@@ -340,6 +358,7 @@ export function FlowPage({ state }: { state: AppState }) {
             trades={chartTrades}
             showTradeMarkers={showTradeMarkers}
             coarseContext={flow.policy.coarseContext}
+            marketProfile={flow.profile}
           />
         </div>
         <p className="dim" style={{ fontSize: 10, margin: "8px 0 0", lineHeight: 1.5 }}>
@@ -387,7 +406,12 @@ export function FlowPage({ state }: { state: AppState }) {
                 </thead>
                 <tbody>
                   {tapeRows.map((r) => (
-                    <TapeRowView key={r.sequence} row={r} />
+                    <TapeRowView
+                      key={r.sequence}
+                      row={r}
+                      pricePrecision={flow.profile.pricing.pricePrecision}
+                      quantityPrecision={flow.profile.units.quantityPrecision}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -405,17 +429,31 @@ export function FlowPage({ state }: { state: AppState }) {
           <div className="panel-head">
             <span className="panel-title">DOM / Level 2</span>
             <span className="right badge">
-              {dom?.hasBook ? `SPR ${fmtPrice(dom.spread ?? 0)}` : "NO BOOK"}
+              {dom?.hasBook ? `SPR ${fmtPrice(dom.spread ?? 0, flow.profile.pricing.pricePrecision)}` : "NO BOOK"}
             </span>
           </div>
           <div className="panel-body">
             {dom && flow.book ? (
               <>
-                <DOMSide levels={flow.book.asks} side="ask" maxSize={maxLevelSize} changes={changeByKey} />
+                <DOMSide
+                  levels={flow.book.asks}
+                  side="ask"
+                  maxSize={maxLevelSize}
+                  changes={changeByKey}
+                  pricePrecision={flow.profile.pricing.pricePrecision}
+                  quantityPrecision={flow.profile.units.quantityPrecision}
+                />
                 <div className="flow-mid mono">
-                  {fmtPrice(dom.bestBid ?? 0)} × {fmtPrice(dom.bestAsk ?? 0)}
+                  {fmtPrice(dom.bestBid ?? 0, flow.profile.pricing.pricePrecision)} × {fmtPrice(dom.bestAsk ?? 0, flow.profile.pricing.pricePrecision)}
                 </div>
-                <DOMSide levels={flow.book.bids} side="bid" maxSize={maxLevelSize} changes={changeByKey} />
+                <DOMSide
+                  levels={flow.book.bids}
+                  side="bid"
+                  maxSize={maxLevelSize}
+                  changes={changeByKey}
+                  pricePrecision={flow.profile.pricing.pricePrecision}
+                  quantityPrecision={flow.profile.units.quantityPrecision}
+                />
                 <div className="flow-dom-changes">
                   {(["NEW", "ADDED", "PULLED", "REMOVED"] as const).map((k) => (
                     <span key={k} className={`badge flow-change-${k.toLowerCase()}`}>
@@ -468,11 +506,11 @@ export function FlowPage({ state }: { state: AppState }) {
                 <span className="v">{of.buyAggressionPct.toFixed(1)}% buy · {of.sellAggressionPct.toFixed(1)}% sell</span>
                 <span className="k">Trade velocity</span><span className="v">{of.velocityPerMin}/min</span>
                 <span className="k">Last / VWAP</span>
-                <span className="v mono">{fmtPrice(of.lastPrice)} / {fmtPrice(of.vwap)}</span>
+                <span className="v mono">{fmtPrice(of.lastPrice, flow.profile.pricing.pricePrecision)} / {fmtPrice(of.vwap, flow.profile.pricing.pricePrecision)}</span>
                 <span className="k">Bid/ask imbalance</span>
                 <span className="v">{of.bidAskImbalance !== null ? `${(of.bidAskImbalance * 100).toFixed(1)}%` : "—"}</span>
                 <span className="k">Volume at price</span>
-                <span className="v">{of.volumeAtPrice.length} levels · busiest {of.volumeAtPrice.length > 0 ? fmtPrice(of.volumeAtPrice.reduce((a, b) => (b.total > a.total ? b : a)).price) : "—"}</span>
+                <span className="v">{of.volumeAtPrice.length} levels · busiest {of.volumeAtPrice.length > 0 ? fmtPrice(of.volumeAtPrice.reduce((a, b) => (b.total > a.total ? b : a)).price, flow.profile.pricing.pricePrecision) : "—"}</span>
                 <span className="k">Sweeps</span>
                 <span className="v">{dom ? `${dom.sweepBuyCount} up / ${dom.sweepSellCount} down` : "—"}</span>
                 <span className="k">Pulls</span>
@@ -503,14 +541,17 @@ export function FlowPage({ state }: { state: AppState }) {
               <>
                 <div className={`flow-pos-side ${flow.position.side === "LONG" ? "long" : flow.position.side === "SHORT" ? "short" : "flat"}`}>
                   {flow.position.side}
-                  {flow.position.quantity > 0 && <span className="flow-pos-qty"> × {flow.position.quantity}</span>}
+                  {flow.position.quantity > 0 && (
+                    <span className="flow-pos-qty"> × {flow.position.quantity} {flow.profile.units.quantityUnit}</span>
+                  )}
                 </div>
                 <div className="flow-qty-row">
-                  <label htmlFor="flow-qty">Quantity</label>
+                  <label htmlFor="flow-qty">Quantity ({flow.profile.units.quantityUnit})</label>
                   <input
                     id="flow-qty"
                     type="number"
-                    min={1}
+                    min={flow.profile.units.minOrderQuantity}
+                    step={flow.profile.units.quantityStep}
                     max={flow.risk.maxPositionQty}
                     value={flow.orderQty}
                     onChange={(e) => controller.setFlowQty(Number(e.target.value))}
@@ -525,20 +566,20 @@ export function FlowPage({ state }: { state: AppState }) {
                 </div>
                 <div className="kv flow-pos-kv">
                   <span className="k">Avg entry</span>
-                  <span className="v mono">{flow.position.averageEntryPrice !== null ? fmtPrice(flow.position.averageEntryPrice) : "—"}</span>
+                  <span className="v mono">{flow.position.averageEntryPrice !== null ? fmtPrice(flow.position.averageEntryPrice, flow.profile.pricing.pricePrecision) : "—"}</span>
                   <span className="k">Current</span>
-                  <span className="v mono">{flow.position.currentPrice !== null ? fmtPrice(flow.position.currentPrice) : "—"}</span>
+                  <span className="v mono">{flow.position.currentPrice !== null ? fmtPrice(flow.position.currentPrice, flow.profile.pricing.pricePrecision) : "—"}</span>
                   <span className="k">Unrealized</span>
-                  <span className={`v mono ${pnlClass(flow.position.unrealizedPnL)}`}>{signedMoney(flow.position.unrealizedPnL)}</span>
+                  <span className={`v mono ${pnlClass(flow.position.unrealizedPnL)}`}>{formatSignedCurrency(flow.position.unrealizedPnL, flow.profile.units.quoteCurrency)}</span>
                   <span className="k">Realized</span>
-                  <span className={`v mono ${pnlClass(flow.position.realizedPnL)}`}>{signedMoney(flow.position.realizedPnL)}</span>
+                  <span className={`v mono ${pnlClass(flow.position.realizedPnL)}`}>{formatSignedCurrency(flow.position.realizedPnL, flow.profile.units.quoteCurrency)}</span>
                   <span className="k">Net</span>
-                  <span className={`v mono ${pnlClass(flow.position.totalPnL)}`}>{signedMoney(flow.position.totalPnL)}</span>
+                  <span className={`v mono ${pnlClass(flow.position.totalPnL)}`}>{formatSignedCurrency(flow.position.totalPnL, flow.profile.units.quoteCurrency)}</span>
                   <span className="k">MFE</span>
-                  <span className="v mono up">{flow.position.maxFavorableExcursion > 0 ? signedMoney(flow.position.maxFavorableExcursion) : "—"}</span>
+                  <span className="v mono up">{flow.position.maxFavorableExcursion > 0 ? formatSignedCurrency(flow.position.maxFavorableExcursion, flow.profile.units.quoteCurrency) : "—"}</span>
                   <span className="k">MAE</span>
-                  <span className="v mono down">{flow.position.maxAdverseExcursion > 0 ? signedMoney(flow.position.maxAdverseExcursion) : "—"}</span>
-                  <span className="k">Costs accrued</span><span className="v mono dim">{money(flow.position.costsAccrued)}</span>
+                  <span className="v mono down">{flow.position.maxAdverseExcursion > 0 ? formatSignedCurrency(flow.position.maxAdverseExcursion, flow.profile.units.quoteCurrency) : "—"}</span>
+                  <span className="k">Costs accrued</span><span className="v mono dim">{formatCurrency(flow.position.costsAccrued, flow.profile.units.quoteCurrency)}</span>
                 </div>
                 {flow.notice && <p className={`flow-notice ${flow.notice.ok ? "ok" : "bad"}`}>{flow.notice.text}</p>}
               </>
@@ -600,8 +641,21 @@ export function FlowPage({ state }: { state: AppState }) {
               <div className="flow-block">
                 <p className="flow-block-title">RISK &amp; COSTS</p>
                 <div className="field">
-                  <label>Max position</label>
-                  <input type="number" min={1} value={flow.risk.maxPositionQty} onChange={(e) => controller.setFlowRisk({ maxPositionQty: Math.max(1, Math.floor(Number(e.target.value) || 1)) })} />
+                  <label>Max position ({flow.profile.units.quantityUnit})</label>
+                  <input
+                    type="number"
+                    min={flow.profile.units.minOrderQuantity}
+                    step={flow.profile.units.quantityStep}
+                    value={flow.risk.maxPositionQty}
+                    onChange={(e) =>
+                      controller.setFlowRisk({
+                        maxPositionQty: Math.max(
+                          flow.profile.units.minOrderQuantity,
+                          Number(e.target.value) || flow.profile.units.minOrderQuantity,
+                        ),
+                      })
+                    }
+                  />
                 </div>
                 <div className="field">
                   <label>Stop (ticks)</label>
@@ -611,10 +665,38 @@ export function FlowPage({ state }: { state: AppState }) {
                   <label>Target (ticks)</label>
                   <input type="number" min={0} placeholder="off" value={flow.risk.takeProfitTicks ?? ""} onChange={(e) => controller.setFlowRisk({ takeProfitTicks: numVal(e.target.value) })} />
                 </div>
-                <div className="field">
-                  <label>Commission $</label>
-                  <input type="number" min={0} step={0.25} value={flow.costs.commissionPerContract} onChange={(e) => controller.setFlowCosts({ commissionPerContract: Math.max(0, numVal(e.target.value) ?? 0) })} />
-                </div>
+                {flow.profile.execution.defaultFeeModel === "basis_points_notional" ? (
+                  <div className="field">
+                    <label>Fee rate</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.0001}
+                      title="Simulated taker fee rate (e.g. 0.0005 = 5 bps)"
+                      value={flow.costs.feeRate ?? flow.profile.execution.defaultFeeRate ?? 0.0005}
+                      onChange={(e) =>
+                        controller.setFlowCosts({
+                          feeRate: Math.max(0, numVal(e.target.value) ?? 0),
+                        })
+                      }
+                    />
+                  </div>
+                ) : (
+                  <div className="field">
+                    <label>Commission ({flow.profile.units.quoteCurrency})</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.25}
+                      value={flow.costs.commissionPerContract ?? flow.profile.execution.defaultFeeRate ?? 2.25}
+                      onChange={(e) =>
+                        controller.setFlowCosts({
+                          commissionPerContract: Math.max(0, numVal(e.target.value) ?? 0),
+                        })
+                      }
+                    />
+                  </div>
+                )}
                 <div className="field">
                   <label>Slippage (ticks)</label>
                   <input type="number" min={0} value={flow.costs.slippageTicks} onChange={(e) => controller.setFlowCosts({ slippageTicks: Math.max(0, Math.floor(numVal(e.target.value) ?? 0)) })} />
@@ -783,7 +865,7 @@ export function FlowPage({ state }: { state: AppState }) {
                     </span>
                     <span className="k">Entry timing</span><span className="v">{flow.results.entryTiming}</span>
                     <span className="k">Net P&amp;L</span>
-                    <span className={`v mono ${pnlClass(flow.results.netPnL)}`}>{signedMoney(flow.results.netPnL)}</span>
+                    <span className={`v mono ${pnlClass(flow.results.netPnL)}`}>{formatSignedCurrency(flow.results.netPnL, flow.profile.units.quoteCurrency)}</span>
                   </div>
                 )}
               </>
@@ -824,7 +906,7 @@ export function FlowPage({ state }: { state: AppState }) {
 
       {/* ====================== 8C TRAINING ANALYTICS ====================== */}
       {flow.revealed && flow.analytics ? (
-        <AnalyticsDashboard analytics={flow.analytics} />
+        <AnalyticsDashboard analytics={flow.analytics} currency={flow.profile.units.quoteCurrency} />
       ) : null}
 
       {/* ====================== 8D SESSION REVIEW ====================== */}
@@ -832,7 +914,12 @@ export function FlowPage({ state }: { state: AppState }) {
       <div className="flow-dock-spacer" aria-hidden />
 
       {flow.revealed && flow.review ? (
-        <ReviewPanel review={flow.review} timelineEmpty={flow.timeline.length === 0} onJump={(index) => { setPlaying(false); controller.seekFlow(index); }} />
+        <ReviewPanel
+          review={flow.review}
+          profile={flow.profile}
+          timelineEmpty={flow.timeline.length === 0}
+          onJump={(index) => { setPlaying(false); controller.seekFlow(index); }}
+        />
       ) : null}
 
       {/* ====================== EVIDENCE TIMELINE ====================== */}
@@ -887,7 +974,7 @@ export function FlowPage({ state }: { state: AppState }) {
                 <span className="k">Win rate</span>
                 <span className="v">{flow.trainingStats.winRatePct}% ({flow.trainingStats.wins}W / {flow.trainingStats.losses}L)</span>
                 <span className="k">Net P&amp;L</span>
-                <span className={`v mono ${pnlClass(flow.trainingStats.netPnL)}`}>{signedMoney(flow.trainingStats.netPnL)}</span>
+                <span className={`v mono ${pnlClass(flow.trainingStats.netPnL)}`}>{formatSignedCurrency(flow.trainingStats.netPnL, flow.profile.units.quoteCurrency)}</span>
               </div>
               <div className="kv">
                 <span className="k">Avg confidence</span>
@@ -895,11 +982,11 @@ export function FlowPage({ state }: { state: AppState }) {
                 <span className="k">Avg MFE capture</span>
                 <span className="v">{flow.trainingStats.avgMfeCapturePct !== null ? `${flow.trainingStats.avgMfeCapturePct}%` : "—"}</span>
                 <span className="k">Avg MAE</span>
-                <span className="v mono">{money(flow.trainingStats.avgMae)}</span>
+                <span className="v mono">{formatCurrency(flow.trainingStats.avgMae, flow.profile.units.quoteCurrency)}</span>
                 <span className="k">Best / worst trade</span>
                 <span className="v mono">
-                  <span className={pnlClass(flow.trainingStats.bestTrade)}>{signedMoney(flow.trainingStats.bestTrade)}</span> /{" "}
-                  <span className={pnlClass(flow.trainingStats.worstTrade)}>{signedMoney(flow.trainingStats.worstTrade)}</span>
+                  <span className={pnlClass(flow.trainingStats.bestTrade)}>{formatSignedCurrency(flow.trainingStats.bestTrade, flow.profile.units.quoteCurrency)}</span> /{" "}
+                  <span className={pnlClass(flow.trainingStats.worstTrade)}>{formatSignedCurrency(flow.trainingStats.worstTrade, flow.profile.units.quoteCurrency)}</span>
                 </span>
               </div>
             </div>
@@ -915,17 +1002,26 @@ export function FlowPage({ state }: { state: AppState }) {
 
 /* ============================ sub-components ============================ */
 
-const TapeRowView = memo(function TapeRowView({ row }: { row: TapeRow }) {
+const TapeRowView = memo(function TapeRowView({
+  row,
+  pricePrecision = 2,
+  quantityPrecision = 0,
+}: {
+  row: TapeRow;
+  pricePrecision?: number;
+  quantityPrecision?: number;
+}) {
   const cls = row.sweepLike ? "sweep" : row.large ? "large" : row.burst ? "burst" : "";
   const sideCls = row.aggressorSide === "BUY" ? "up" : row.aggressorSide === "SELL" ? "down" : "dim";
+  const sizeText = quantityPrecision > 0 ? row.size.toFixed(quantityPrecision) : row.size.toString();
   return (
     <tr className={`flow-tape-row ${cls}`}>
       <td className="mono dim">{tapeTime(row.timestamp)}</td>
-      <td className={`r mono ${sideCls}`}>{fmtPrice(row.price)}</td>
-      <td className="r mono">{row.size}</td>
+      <td className={`r mono ${sideCls}`}>{fmtPrice(row.price, pricePrecision)}</td>
+      <td className="r mono">{sizeText}</td>
       <td className="r mono dim">
         <span className="flow-rel-size" style={{ width: `${Math.max(2, row.relativeSize * 100)}%` }} />
-        {row.size}
+        {sizeText}
       </td>
       <td className={`r ${sideCls}`}>{row.aggressorSide}</td>
     </tr>
@@ -937,11 +1033,15 @@ const DOMSide = memo(function DOMSide({
   side,
   maxSize,
   changes,
+  pricePrecision = 2,
+  quantityPrecision = 0,
 }: {
   levels: Level[];
   side: "bid" | "ask";
   maxSize: number;
   changes: Map<string, BookChange>;
+  pricePrecision?: number;
+  quantityPrecision?: number;
 }) {
   const rows = side === "ask" ? [...levels].reverse() : levels;
   return (
@@ -949,11 +1049,12 @@ const DOMSide = memo(function DOMSide({
       {rows.map((l) => {
         const change = changes.get(`${side}:${l.price}`);
         const k = change ? change.kind.toLowerCase() : "";
+        const sizeText = quantityPrecision > 0 ? l.size.toFixed(quantityPrecision) : l.size.toString();
         return (
           <div key={`${side}-${l.price}`} className={`flow-dom-row ${k ? `flow-dom-${k}` : ""}`}>
             <span className="flow-dom-bar" style={{ width: `${(l.size / maxSize) * 100}%` }} />
-            <span className="mono flow-dom-price">{fmtPrice(l.price)}</span>
-            <span className="mono flow-dom-size">{l.size}</span>
+            <span className="mono flow-dom-price">{fmtPrice(l.price, pricePrecision)}</span>
+            <span className="mono flow-dom-size">{sizeText}</span>
             <span className="mono dim flow-dom-ord">×{l.orderCount}</span>
             {k && <span className={`flow-dom-tag mono flow-dom-tag-${k}`}>{BOOK_CHANGE_LABELS[change!.kind]}</span>}
           </div>
@@ -963,7 +1064,13 @@ const DOMSide = memo(function DOMSide({
   );
 });
 
-const AnalyticsDashboard = memo(function AnalyticsDashboard({ analytics }: { analytics: FlowAnalytics }) {
+const AnalyticsDashboard = memo(function AnalyticsDashboard({
+  analytics,
+  currency = "USD",
+}: {
+  analytics: FlowAnalytics;
+  currency?: string;
+}) {
   const { thresholds } = analytics;
   return (
     <div className="card">
@@ -976,8 +1083,8 @@ const AnalyticsDashboard = memo(function AnalyticsDashboard({ analytics }: { ana
           <div className="flow-stat"><span className="flow-stat-label">Sessions</span><span className="flow-stat-value mono">{analytics.sessions}</span></div>
           <div className="flow-stat"><span className="flow-stat-label">Trades</span><span className="flow-stat-value mono">{analytics.trades}</span></div>
           <div className="flow-stat"><span className="flow-stat-label">Win rate</span><span className="flow-stat-value mono">{analytics.winRatePct !== null ? `${analytics.winRatePct}%` : INSUFFICIENT_SAMPLE_LABEL}</span></div>
-          <div className="flow-stat"><span className="flow-stat-label">Net P&amp;L</span><span className={`flow-stat-value mono ${pnlClass(analytics.netPnL)}`}>{signedMoney(analytics.netPnL)}</span></div>
-          <div className="flow-stat"><span className="flow-stat-label">Avg trade</span><span className="flow-stat-value mono">{analytics.avgTrade !== null ? signedMoney(analytics.avgTrade) : "—"}</span></div>
+          <div className="flow-stat"><span className="flow-stat-label">Net P&amp;L</span><span className={`flow-stat-value mono ${pnlClass(analytics.netPnL)}`}>{formatSignedCurrency(analytics.netPnL, currency)}</span></div>
+          <div className="flow-stat"><span className="flow-stat-label">Avg trade</span><span className="flow-stat-value mono">{analytics.avgTrade !== null ? formatSignedCurrency(analytics.avgTrade, currency) : "—"}</span></div>
           <div className="flow-stat"><span className="flow-stat-label">Profit factor</span><span className="flow-stat-value mono">{analytics.profitFactor !== null ? analytics.profitFactor : INSUFFICIENT_SAMPLE_LABEL}</span></div>
           <div className="flow-stat"><span className="flow-stat-label">MFE capture</span><span className="flow-stat-value mono">{analytics.mfeCapturePct !== null ? `${analytics.mfeCapturePct}%` : INSUFFICIENT_SAMPLE_LABEL}</span></div>
           <div className="flow-stat"><span className="flow-stat-label">Avg hold</span><span className="flow-stat-value mono">{analytics.avgHoldMs !== null ? `${(analytics.avgHoldMs / 1000).toFixed(1)}s` : INSUFFICIENT_SAMPLE_LABEL}</span></div>
@@ -1053,7 +1160,7 @@ const AnalyticsDashboard = memo(function AnalyticsDashboard({ analytics }: { ana
                   <tr key={b.level}>
                     <td className="mono">{b.level}</td>
                     <td className="r mono">{b.insufficient ? <span className="dim">—</span> : b.winRatePct !== null ? `${b.winRatePct}%` : "—"}</td>
-                    <td className={`r mono ${b.avgNetPnL !== null ? pnlClass(b.avgNetPnL) : ""}`}>{b.avgNetPnL !== null ? signedMoney(b.avgNetPnL) : "—"}</td>
+                    <td className={`r mono ${b.avgNetPnL !== null ? pnlClass(b.avgNetPnL) : ""}`}>{b.avgNetPnL !== null ? formatSignedCurrency(b.avgNetPnL, currency) : "—"}</td>
                     <td className="r mono dim">{b.trades}</td>
                   </tr>
                 ))}
@@ -1100,10 +1207,12 @@ const AnalyticsDashboard = memo(function AnalyticsDashboard({ analytics }: { ana
 
 const ReviewPanel = memo(function ReviewPanel({
   review,
+  profile,
   timelineEmpty,
   onJump,
 }: {
   review: FlowReview;
+  profile: Readonly<MarketProfile>;
   timelineEmpty: boolean;
   onJump: (index: number) => void;
 }) {
@@ -1125,10 +1234,10 @@ const ReviewPanel = memo(function ReviewPanel({
               <div key={t.tradeId} className="flow-review-trade">
                 <div className="flow-review-head">
                   <span className={`flow-review-side ${t.side === "LONG" ? "long" : "short"}`}>
-                    {t.side} {t.quantity}
+                    {t.side} {t.quantity} {profile.units.quantityUnit}
                   </span>
-                  <span className="mono">{fmtPrice(t.entryPrice)} → {fmtPrice(t.exitPrice)}</span>
-                  <span className={`mono ${pnlClass(t.netPnL)}`}>{signedMoney(t.netPnL)}</span>
+                  <span className="mono">{fmtPrice(t.entryPrice, profile.pricing.pricePrecision)} → {fmtPrice(t.exitPrice, profile.pricing.pricePrecision)}</span>
+                  <span className={`mono ${pnlClass(t.netPnL)}`}>{formatSignedCurrency(t.netPnL, profile.units.quoteCurrency)}</span>
                   <span className="dim mono">{t.exitReason}</span>
                   <button className="chip" onClick={() => onJump(t.entryIndex)}>JUMP TO ENTRY</button>
                   <button className="chip" onClick={() => onJump(t.exitIndex)}>JUMP TO EXIT</button>
@@ -1139,7 +1248,7 @@ const ReviewPanel = memo(function ReviewPanel({
                     <span className="k">Prediction</span><span className="v">{t.prediction} · {t.bias}</span>
                     <span className="k">Confidence</span><span className="v">{t.confidence}/5</span>
                     <span className="k">MFE / MAE</span>
-                    <span className="v mono"><span className="up">{signedMoney(t.mfe)}</span> / <span className="down">{signedMoney(t.mae)}</span></span>
+                    <span className="v mono"><span className="up">{formatSignedCurrency(t.mfe, profile.units.quoteCurrency)}</span> / <span className="down">{formatSignedCurrency(t.mae, profile.units.quoteCurrency)}</span></span>
                     <span className="k">Hold</span><span className="v mono">{(t.durationMs / 1000).toFixed(1)}s</span>
                   </div>
                   <div>
