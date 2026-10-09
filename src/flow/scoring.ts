@@ -16,6 +16,7 @@
  *   confidence-vs-result.
  */
 
+import type { MarketProfile } from "../market/profile";
 import type { ContractSpec } from "../market/types";
 import type { DOMSnapshot } from "./dom";
 import type { FlowBias, FlowDecision, FlowPrediction, FlowRisk } from "./execution";
@@ -144,7 +145,8 @@ export interface FlowScoreInput {
   records: readonly FlowTradeRecord[];
   decision: FlowDecision;
   risk: FlowRisk;
-  contract: ContractSpec;
+  profile?: Readonly<MarketProfile>;
+  contract?: ContractSpec;
   orderFlow: FlowNarrativeOrderFlow;
   dom: FlowNarrativeDom;
   /** Engine's observable-only recognition — never derived from truth. */
@@ -256,7 +258,7 @@ function majorityDirection(records: readonly FlowTradeRecord[]): "LONG" | "SHORT
 }
 
 export function scoreFlowSession(input: FlowScoreInput): FlowSessionResults {
-  const { truth, records, decision, risk, contract, orderFlow, dom, recognition } = input;
+  const { truth, records, decision, risk, orderFlow, dom, recognition } = input;
   const difficulty: FlowDifficulty = input.difficulty ?? "INTERMEDIATE";
 
   const trades = records.length;
@@ -295,8 +297,9 @@ export function scoreFlowSession(input: FlowScoreInput): FlowSessionResults {
   let rMultiple: number | null = null;
   const stopTicks = risk.stopLossTicks;
   if (stopTicks !== null && stopTicks > 0) {
-    const riskPerContract = stopTicks * contract.tickValue;
-    const denominator = records.reduce((s, r) => s + riskPerContract * r.quantity, 0);
+    const tickVal = input.profile ? input.profile.execution.tickValue : (input.contract ? input.contract.tickValue : 5.0);
+    const riskPerUnit = stopTicks * tickVal;
+    const denominator = records.reduce((s, r) => s + riskPerUnit * r.quantity, 0);
     if (denominator > 0) rMultiple = round2(netPnL / denominator);
   }
 

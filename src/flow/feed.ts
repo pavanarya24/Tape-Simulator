@@ -13,12 +13,15 @@
  */
 
 import type { MarketEvent } from "./events";
+import type { MarketProfile } from "../market/profile";
 
 export interface MarketDataFeed {
   /** Stable, user-facing label. Synthetic data must identify itself. */
   readonly source: string;
   /** True only for real recorded/live market data — never for synthetic. */
   readonly isRealData: boolean;
+  /** Optional associated MarketProfile definition. */
+  readonly profile?: Readonly<MarketProfile>;
 
   /** Rewind to the very beginning (before the first event). */
   reset(): void;

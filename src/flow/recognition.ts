@@ -27,6 +27,7 @@
 import type { OrderFlowSnapshot } from "./orderFlow";
 import type { FlowScenarioId } from "./scenarios";
 import type { TrainingSnapshot } from "./training";
+import type { MarketProfile } from "../market/profile";
 
 /* ------------------------------ types ------------------------------ */
 
@@ -58,11 +59,13 @@ export interface FlowRecognition {
   evidence: FlowEvidence[];
 }
 
-/** What recognizeFlow() needs — a strict subset of TrainingSnapshot. */
+/** What recognizeFlow() needs — a strict subset of TrainingSnapshot with optional MarketProfile. */
 export type FlowAnalysisInput = Pick<
   TrainingSnapshot,
   "sequence" | "timestamp" | "priceSeries" | "orderFlow" | "dom"
->;
+> & {
+  profile?: Readonly<MarketProfile>;
+};
 
 /**
  * Chart marker types (annotation labels are objective before Reveal).
@@ -170,16 +173,19 @@ interface Analysis {
   /** Cumulative delta compared across the two halves of the path. */
   divergenceDown: boolean;
   divergenceUp: boolean;
+  busyTolerance: number;
 }
 
-function buildAnalysis(input: FlowAnalysisInput): Analysis {
+function buildAnalysis(input: FlowAnalysisInput, profileOverride?: Readonly<MarketProfile>): Analysis {
   const { orderFlow: of, dom } = input;
   const points = input.priceSeries;
   const prices = points.map((p) => p.price);
   const n = prices.length;
   const lo = n > 0 ? Math.min(...prices) : 0;
   const hi = n > 0 ? Math.max(...prices) : 0;
-  const range = Math.max(hi - lo, 0.25);
+  const tick = (profileOverride ?? input.profile)?.pricing.tickSize ?? 0.25;
+  const busyTolerance = 2 * tick;
+  const range = Math.max(hi - lo, tick);
   let lowIdx = 0;
   let highIdx = 0;
   for (let i = 0; i < n; i++) {
@@ -227,7 +233,7 @@ function buildAnalysis(input: FlowAnalysisInput): Analysis {
   let topZone = 0;
   const topThreshold = hi - 0.25 * range;
   for (const level of profile) {
-    if (Math.abs(level.price - busyPrice) <= 0.5) busyZone += level.total;
+    if (Math.abs(level.price - busyPrice) <= busyTolerance) busyZone += level.total;
     if (level.price >= topThreshold) topZone += level.total;
   }
 
@@ -275,6 +281,7 @@ function buildAnalysis(input: FlowAnalysisInput): Analysis {
     lateMax,
     vwapPos: of.vwap > 0 ? (of.vwap - lo) / range : 0.5,
     busyPrice,
+    busyTolerance,
     maxLevelShare: busyTotal / totalVolume,
     busyZoneShare: busyZone / totalVolume,
     topZoneShare: topZone / totalVolume,
@@ -657,7 +664,7 @@ function detectAbsorption(a: Analysis, seqs: number[]): DetectorResult {
   // First point that touched the busy level marks where the battle formed.
   let startSeq = seqs[0] ?? a.seq;
   for (let i = 0; i < a.prices.length; i++) {
-    if (Math.abs(a.prices[i] - a.busyPrice) <= 0.5) {
+    if (Math.abs(a.prices[i] - a.busyPrice) <= a.busyTolerance) {
       startSeq = seqs[i] ?? startSeq;
       break;
     }
@@ -806,8 +813,9 @@ function rankDetectors(
  */
 export function rankFlowPatterns(
   input: FlowAnalysisInput,
+  profile?: Readonly<MarketProfile>,
 ): Array<{ pattern: FlowScenarioId; score: number; signals: string[] }> {
-  const analysis = buildAnalysis(input);
+  const analysis = buildAnalysis(input, profile);
   if (analysis.n < RECOGNITION_MIN_POINTS || input.orderFlow.tradeCount === 0) return [];
   const seqs = input.priceSeries.map((p) => p.sequence);
   return rankDetectors(analysis, seqs).map((r) => ({ pattern: r.id, score: r.score, signals: r.signals }));
@@ -818,8 +826,11 @@ export function rankFlowPatterns(
  * presence or absence of ScenarioTruth on the caller cannot affect it because
  * truth is not part of the input type.
  */
-export function recognizeFlow(input: FlowAnalysisInput): FlowRecognition {
-  const analysis = buildAnalysis(input);
+export function recognizeFlow(
+  input: FlowAnalysisInput,
+  profile?: Readonly<MarketProfile>,
+): FlowRecognition {
+  const analysis = buildAnalysis(input, profile);
   const evidence = buildEvidence(analysis, input.orderFlow);
 
   if (analysis.n < RECOGNITION_MIN_POINTS || input.orderFlow.tradeCount === 0) {

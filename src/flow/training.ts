@@ -21,6 +21,8 @@
 
 import type { Level, MarketEvent } from "./events";
 import type { MarketDataFeed } from "./feed";
+import type { MarketProfile } from "../market/profile";
+import { PROFILE_CME_NQ } from "../market/registry";
 import { DOMEngine, type DOMSnapshot, type DOMState } from "./dom";
 import { OrderFlowEngine, type OrderFlowSnapshot, type OrderFlowState } from "./orderFlow";
 import { CheckpointManager } from "./checkpointManager";
@@ -45,6 +47,7 @@ export interface SeekMetrics {
 
 export interface TrainingEngineOptions {
   checkpointInterval?: number;
+  profile?: Readonly<MarketProfile>;
 }
 
 /**
@@ -52,6 +55,8 @@ export interface TrainingEngineOptions {
  * Strictly decoupled from secret ScenarioTruth (blind-mode safe).
  */
 export interface FlowEngineCheckpoint {
+  /** Optional profile identifier tagging the checkpoint. */
+  readonly profileId?: string;
   /** Events consumed so far up to this checkpoint. */
   readonly eventIndex: number;
   /** Sequence number of the newest event consumed (0 if none). */
@@ -91,6 +96,7 @@ export interface TrainingSnapshot {
 }
 
 export class TrainingEngine {
+  readonly profile: Readonly<MarketProfile>;
   private readonly feed: MarketDataFeed;
   private readonly truth: ScenarioTruth | null;
   private readonly of = new OrderFlowEngine();
@@ -107,7 +113,13 @@ export class TrainingEngine {
     truth: ScenarioTruth | null = null,
     options: TrainingEngineOptions = {},
   ) {
+    if (options.profile && feed.profile && options.profile.id !== feed.profile.id) {
+      throw new Error(
+        `MarketProfile mismatch: explicit options.profile '${options.profile.id}' conflicts with feed.profile '${feed.profile.id}'`,
+      );
+    }
     this.feed = feed;
+    this.profile = options.profile ?? feed.profile ?? PROFILE_CME_NQ;
     this.truth = truth;
     this.checkpoints = new CheckpointManager({ interval: options.checkpointInterval });
     // Capture initial state at index 0 immediately
@@ -261,6 +273,7 @@ export class TrainingEngine {
    */
   captureCheckpoint(): FlowEngineCheckpoint {
     return {
+      profileId: this.profile.id,
       eventIndex: this.consumed,
       sequence: this.lastSequence,
       timestamp: this.lastTimestamp,
@@ -276,6 +289,17 @@ export class TrainingEngine {
    * Does NOT alter ScenarioTruth.
    */
   restoreCheckpoint(checkpoint: FlowEngineCheckpoint): void {
+    if (checkpoint.profileId !== undefined && checkpoint.profileId !== this.profile.id) {
+      throw new Error(
+        `Checkpoint profile mismatch: checkpoint tagged with '${checkpoint.profileId}' cannot be restored into engine configured with '${this.profile.id}'`,
+      );
+    }
+    if (checkpoint.profileId === undefined && this.profile.id !== PROFILE_CME_NQ.id) {
+      throw new Error(
+        `Legacy checkpoint without profileId cannot be restored into non-NQ profile '${this.profile.id}' without explicit migration`,
+      );
+    }
+
     this.consumed = checkpoint.eventIndex;
     this.lastSequence = checkpoint.sequence;
     this.lastTimestamp = checkpoint.timestamp;

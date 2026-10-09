@@ -26,6 +26,7 @@ import type {
   TradeEvent,
 } from "./events";
 import type { MarketDataFeed } from "./feed";
+import type { MarketProfile } from "../market/profile";
 
 export const FEED_TICK = 0.25;
 /** Fixed session anchor so generated timestamps are reproducible: 2024-03-15 09:30 America/New_York. */
@@ -208,6 +209,10 @@ export interface SyntheticFeedOptions {
   startPrice?: number;
   /** Average milliseconds between prints. Default 420. */
   msPerTrade?: number;
+  /** Optional market profile to derive tick size, precision, and symbol defaults. */
+  profile?: Readonly<MarketProfile>;
+  /** Optional explicit tick size override. */
+  tickSize?: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -230,16 +235,28 @@ function clamp(v: number, lo: number, hi: number): number {
 export class SyntheticMarketDataFeed implements MarketDataFeed {
   readonly source = "Synthetic Training Data";
   readonly isRealData = false;
+  readonly profile?: Readonly<MarketProfile>;
 
   private readonly eventsArr: MarketEvent[];
   private cursor = 0; // index of next event to emit
 
   constructor(options: SyntheticFeedOptions) {
+    this.profile = options.profile;
     const seed = options.seed >>> 0;
     const rng = makeRng(seed ^ 0x9e3779b9);
     const plan = options.plan ?? defaultPlan();
     const msPerTrade = options.msPerTrade ?? 420;
-    const startTicks = Math.round((options.startPrice ?? 18000) / FEED_TICK);
+
+    const tick = options.profile?.pricing.tickSize ?? options.tickSize ?? FEED_TICK;
+    const prec = options.profile?.pricing.pricePrecision ?? 2;
+    const defaultStartPrice = options.profile?.identity.symbol === "BTCUSDT"
+      ? 65000
+      : options.profile?.identity.symbol === "ES"
+        ? 5000
+        : 18000;
+    const startPrice = options.startPrice ?? defaultStartPrice;
+    const startTicks = Math.round(startPrice / tick);
+    const formatPrice = (pTicks: number) => +(pTicks * tick).toFixed(prec);
 
     const events: MarketEvent[] = [];
     let priceTicks = startTicks;
@@ -268,7 +285,7 @@ export class SyntheticMarketDataFeed implements MarketDataFeed {
 
     const buildLevel = (priceTicksAt: number, size: number): Level => {
       const orders = clamp(Math.round(size / orderSizeMean), 1, 40);
-      return { price: +(priceTicksAt * FEED_TICK).toFixed(2), size: Math.round(size), orderCount: orders };
+      return { price: formatPrice(priceTicksAt), size: Math.round(size), orderCount: orders };
     };
 
     const emitL2 = () => {
@@ -404,7 +421,7 @@ export class SyntheticMarketDataFeed implements MarketDataFeed {
 
         // ---- emit trade + cadenced book refresh ----
         timestamp += Math.round(msPerTrade * (0.55 + rng() * 0.9));
-        push({ kind: "trade", timestamp, price: +(priceTicks * FEED_TICK).toFixed(2), size, aggressorSide: side });
+        push({ kind: "trade", timestamp, price: formatPrice(priceTicks), size, aggressorSide: side });
 
         evolveSide(bid, regime, regime.stackSide === -1 || pinFloor !== null, rng);
         evolveSide(ask, regime, regime.stackSide === 1 || pinCeil !== null, rng);

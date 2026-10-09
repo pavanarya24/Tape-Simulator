@@ -14,6 +14,7 @@
 
 import type { MarketEvent, TradeEvent } from "./events";
 import { SyntheticMarketDataFeed, makeRng, type PhaseSpec } from "./synthetic";
+import type { MarketProfile } from "../market/profile";
 
 /** Training difficulty — shapes scenario generation (never the recognition). */
 export type FlowDifficulty = "BEGINNER" | "INTERMEDIATE" | "ADVANCED" | "EXPERT";
@@ -28,6 +29,10 @@ export const FLOW_DIFFICULTIES: readonly FlowDifficulty[] = [
 export interface GenerateScenarioOptions {
   /** Defaults to BEGINNER: the canonical, cleanest-separation plan. */
   difficulty?: FlowDifficulty;
+  /** Optional market profile for tick size, precision, and start price alignment. */
+  profile?: Readonly<MarketProfile>;
+  /** Optional starting mid price override. */
+  startPrice?: number;
 }
 
 export type FlowScenarioId = "spring" | "upthrust" | "absorption" | "initiative-break" | "responsive-fade";
@@ -162,12 +167,26 @@ function feedFor(
   basePlan: PhaseSpec[],
   difficulty: FlowDifficulty,
   bullish: boolean,
+  opts?: GenerateScenarioOptions,
 ): SyntheticMarketDataFeed {
   const rng = makeRng((seed ^ 0x9e3779b9) >>> 0);
   const plan = shapePlan(basePlan, difficulty, bullish, rng);
-  const startPrice = Math.round((17700 + rng() * 600) / 0.25) * 0.25;
+  const tick = opts?.profile?.pricing.tickSize ?? 0.25;
+  const baseStart = opts?.startPrice ?? (
+    opts?.profile?.identity.symbol === "BTCUSDT"
+      ? 65000
+      : opts?.profile?.identity.symbol === "ES"
+        ? 5000
+        : 18000
+  );
+  // Keep exact NQ jitter when profile is not provided or NQ
+  const startPrice = opts?.startPrice !== undefined
+    ? opts.startPrice
+    : opts?.profile && opts.profile.identity.symbol !== "NQ"
+      ? Math.round((baseStart + (rng() - 0.5) * baseStart * 0.03) / tick) * tick
+      : Math.round((17700 + rng() * 600) / 0.25) * 0.25;
   const msPerTrade = Math.round(320 + rng() * 260);
-  return new SyntheticMarketDataFeed({ seed, plan, startPrice, msPerTrade });
+  return new SyntheticMarketDataFeed({ seed, plan, startPrice, msPerTrade, profile: opts?.profile, tickSize: tick });
 }
 
 function extremeTrade(ts: TradeEvent[], mode: "min" | "max"): TradeEvent {
@@ -220,10 +239,12 @@ function spring(seed: number, opts?: GenerateScenarioOptions): GeneratedScenario
     { kind: "failed-breakout-down", trades: 100 },
     { kind: "breakout-continuation-up", trades: 80 },
   ];
-  const feed = feedFor(seed, plan, opts?.difficulty ?? "BEGINNER", true);
+  const feed = feedFor(seed, plan, opts?.difficulty ?? "BEGINNER", true, opts);
   const ts = trades(feed.events());
+  const tick = opts?.profile?.pricing.tickSize ?? 0.25;
   const low = extremeTrade(ts, "min");
-  const reclaim = firstTradeAtOrAfter(ts, low.sequence, (t) => t.price >= low.price + 1.5) ?? ts[ts.length - 1];
+  const reclaimDelta = tick * 6;
+  const reclaim = firstTradeAtOrAfter(ts, low.sequence, (t) => t.price >= low.price + reclaimDelta) ?? ts[ts.length - 1];
   return {
     feed,
     truth: {
@@ -250,10 +271,12 @@ function upthrust(seed: number, opts?: GenerateScenarioOptions): GeneratedScenar
     { kind: "failed-breakout-up", trades: 100 },
     { kind: "breakout-continuation-down", trades: 80 },
   ];
-  const feed = feedFor(seed, plan, opts?.difficulty ?? "BEGINNER", false);
+  const feed = feedFor(seed, plan, opts?.difficulty ?? "BEGINNER", false, opts);
   const ts = trades(feed.events());
+  const tick = opts?.profile?.pricing.tickSize ?? 0.25;
   const high = extremeTrade(ts, "max");
-  const failure = firstTradeAtOrAfter(ts, high.sequence, (t) => t.price <= high.price - 1.5) ?? ts[ts.length - 1];
+  const failureDelta = tick * 6;
+  const failure = firstTradeAtOrAfter(ts, high.sequence, (t) => t.price <= high.price - failureDelta) ?? ts[ts.length - 1];
   return {
     feed,
     truth: {
@@ -279,9 +302,10 @@ function absorption(seed: number, opts?: GenerateScenarioOptions): GeneratedScen
     { kind: "bid-absorption", trades: 110 },
     { kind: "trend-up", trades: 60 },
   ];
-  const feed = feedFor(seed, plan, opts?.difficulty ?? "BEGINNER", true);
+  const feed = feedFor(seed, plan, opts?.difficulty ?? "BEGINNER", true, opts);
   const ts = trades(feed.events());
   const level = busiestLevel(ts.slice(40));
+  const prec = opts?.profile?.pricing.pricePrecision ?? 2;
   return {
     feed,
     truth: {
@@ -290,7 +314,7 @@ function absorption(seed: number, opts?: GenerateScenarioOptions): GeneratedScen
       startEvent: level.first.sequence,
       endEvent: level.last.sequence,
       characteristics: [
-        `Heaviest volume of the session prints at ${level.price.toFixed(2)}`,
+        `Heaviest volume of the session prints at ${level.price.toFixed(prec)}`,
         "Aggressive selling makes almost no downward progress",
         "Passive bids keep refilling the level",
         "Price lifts away once sellers are exhausted",
@@ -307,12 +331,15 @@ function initiativeBreak(seed: number, opts?: GenerateScenarioOptions): Generate
     { kind: "breakout-continuation-up", trades: 120 },
     { kind: "trend-up", trades: 60 },
   ];
-  const feed = feedFor(seed, plan, opts?.difficulty ?? "BEGINNER", true);
+  const feed = feedFor(seed, plan, opts?.difficulty ?? "BEGINNER", true, opts);
   const ts = trades(feed.events());
+  const tick = opts?.profile?.pricing.tickSize ?? 0.25;
+  const prec = opts?.profile?.pricing.pricePrecision ?? 2;
   // Range = the balanced warm-up before the break (first 100 trades).
   const range = ts.slice(0, 100);
   const rangeHigh = extremeTrade(range, "max").price;
-  const breakTrade = firstTradeAtOrAfter(ts, range[range.length - 1].sequence, (t) => t.price > rangeHigh + 0.5) ?? ts[ts.length - 1];
+  const breakDelta = tick * 2;
+  const breakTrade = firstTradeAtOrAfter(ts, range[range.length - 1].sequence, (t) => t.price > rangeHigh + breakDelta) ?? ts[ts.length - 1];
   return {
     feed,
     truth: {
@@ -321,7 +348,7 @@ function initiativeBreak(seed: number, opts?: GenerateScenarioOptions): Generate
       startEvent: breakTrade.sequence,
       endEvent: ts[ts.length - 1].sequence,
       characteristics: [
-        `Range high at ${rangeHigh.toFixed(2)} breaks on initiative buying`,
+        `Range high at ${rangeHigh.toFixed(prec)} breaks on initiative buying`,
         "Aggressive buyers lift offers faster than they refill",
         "Cumulative delta expands with the move",
         "Pullbacks are shallow and bought",
@@ -338,10 +365,12 @@ function responsiveFade(seed: number, opts?: GenerateScenarioOptions): Generated
     { kind: "delta-divergence", trades: 80 },
     { kind: "trend-down", trades: 80 },
   ];
-  const feed = feedFor(seed, plan, opts?.difficulty ?? "BEGINNER", false);
+  const feed = feedFor(seed, plan, opts?.difficulty ?? "BEGINNER", false, opts);
   const ts = trades(feed.events());
+  const tick = opts?.profile?.pricing.tickSize ?? 0.25;
   const high = extremeTrade(ts, "max");
-  const fade = firstTradeAtOrAfter(ts, high.sequence, (t) => t.price <= high.price - 1.5) ?? ts[ts.length - 1];
+  const fadeDelta = tick * 6;
+  const fade = firstTradeAtOrAfter(ts, high.sequence, (t) => t.price <= high.price - fadeDelta) ?? ts[ts.length - 1];
   return {
     feed,
     truth: {
