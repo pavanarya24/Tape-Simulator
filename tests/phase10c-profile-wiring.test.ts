@@ -5,7 +5,9 @@ import {
   PROFILE_BINANCE_BTCUSDT_SPOT,
   PROFILE_BINANCE_BTCUSDT_FUTURES,
   getMarketProfile,
+  requireMarketProfile,
 } from "../src/market/registry";
+import { validateMarketProfile } from "../src/market/profile";
 import { buildTapeRows } from "../src/flow/tape";
 import { recognizeFlow, rankFlowPatterns } from "../src/flow/recognition";
 import { SyntheticMarketDataFeed } from "../src/flow/synthetic";
@@ -19,9 +21,9 @@ import { DOMEngine } from "../src/flow/dom";
 
 describe("PHASE 10-C: MarketProfile Propagation & Market-Aware Replay", () => {
   /* ------------------------------------------------------------------ */
-  /* 1. Profile Propagation                                              */
+  /* 1. Profile Propagation & Fallback Safety                            */
   /* ------------------------------------------------------------------ */
-  describe("1. Profile Propagation", () => {
+  describe("1. Profile Propagation & Fallback Safety", () => {
     test("MarketDataFeed / RealMarketDataFeed propagates injected MarketProfile", () => {
       const btcProfile = getMarketProfile("BINANCE:BTCUSDT-SPOT")!;
       expect(btcProfile).toBeDefined();
@@ -47,22 +49,57 @@ describe("PHASE 10-C: MarketProfile Propagation & Market-Aware Replay", () => {
       expect(engineBtcFromFeed.profile.id).toBe("BINANCE:BTCUSDT-SPOT");
 
       const esProfile = getMarketProfile("CME:ES")!;
-      const engineExplicit = new TrainingEngine(syntheticNq, null, { profile: esProfile });
+      const syntheticEs = new SyntheticMarketDataFeed({ seed: 42, profile: esProfile });
+      const engineExplicit = new TrainingEngine(syntheticEs, null, { profile: esProfile });
       expect(engineExplicit.profile.id).toBe("CME:ES");
     });
 
-    test("FlowTrainingSession propagates profile to TrainingEngine and snapshot", () => {
-      const btcProfile = getMarketProfile("BINANCE:BTCUSDT-FUTURES")!;
-      const feed = new SyntheticMarketDataFeed({ seed: 123, profile: btcProfile });
-      const session = new FlowTrainingSession(feed, null, { profile: btcProfile });
+    test("rejects incompatible configuration when feed profile and explicit options profile disagree", () => {
+      const btcProfile = getMarketProfile("BINANCE:BTCUSDT-SPOT")!;
+      const esProfile = getMarketProfile("CME:ES")!;
+      const btcFeed = new SyntheticMarketDataFeed({ seed: 42, profile: btcProfile });
 
-      expect(session.profile.id).toBe("BINANCE:BTCUSDT-FUTURES");
-      expect(session.profile.pricing.tickSize).toBe(0.1);
+      // TrainingEngine must reject profile disagreement
+      expect(() => {
+        new TrainingEngine(btcFeed, null, { profile: esProfile });
+      }).toThrow(/MarketProfile mismatch: explicit options.profile 'CME:ES' conflicts with feed.profile 'BINANCE:BTCUSDT-SPOT'/);
 
-      session.step(10);
-      const snap = session.snapshot();
-      expect(snap.eventIndex).toBe(10);
-      expect(snap.evidence.length).toBeGreaterThan(0);
+      // FlowTrainingSession must also reject profile disagreement
+      expect(() => {
+        new FlowTrainingSession(btcFeed, null, { profile: esProfile });
+      }).toThrow(/MarketProfile mismatch: explicit opts.profile 'CME:ES' conflicts with feed.profile 'BINANCE:BTCUSDT-SPOT'/);
+    });
+
+    test("unknown profile IDs fail explicitly rather than silently falling back", () => {
+      expect(getMarketProfile("UNKNOWN:MARKET")).toBeUndefined();
+      expect(() => requireMarketProfile("UNKNOWN:MARKET")).toThrow(/MarketProfile not found/);
+
+      const invalidProfile = { id: "FAKE", pricing: { tickSize: -1 } };
+      const report = validateMarketProfile(invalidProfile);
+      expect(report.isValid).toBe(false);
+      expect(report.errors.length).toBeGreaterThan(0);
+    });
+
+    test("Binance Spot and USD-M Futures feeds retain their exact profiles through entire session lifecycle", () => {
+      const btcSpot = getMarketProfile("BINANCE:BTCUSDT-SPOT")!;
+      const btcFut = getMarketProfile("BINANCE:BTCUSDT-FUTURES")!;
+
+      const feedSpot = new SyntheticMarketDataFeed({ seed: 101, profile: btcSpot });
+      const sessionSpot = new FlowTrainingSession(feedSpot, null, { profile: btcSpot });
+      expect(sessionSpot.profile.id).toBe("BINANCE:BTCUSDT-SPOT");
+      expect(sessionSpot.profile.pricing.tickSize).toBe(0.01);
+      sessionSpot.warmup(20);
+      sessionSpot.step(30);
+      expect(sessionSpot.snapshot().eventIndex).toBe(50);
+      expect(sessionSpot.snapshot().evidence.length).toBeGreaterThan(0);
+
+      const feedFut = new SyntheticMarketDataFeed({ seed: 202, profile: btcFut });
+      const sessionFut = new FlowTrainingSession(feedFut, null, { profile: btcFut });
+      expect(sessionFut.profile.id).toBe("BINANCE:BTCUSDT-FUTURES");
+      expect(sessionFut.profile.pricing.tickSize).toBe(0.1);
+      sessionFut.warmup(20);
+      sessionFut.step(30);
+      expect(sessionFut.snapshot().eventIndex).toBe(50);
     });
   });
 
@@ -393,7 +430,7 @@ describe("PHASE 10-C: MarketProfile Propagation & Market-Aware Replay", () => {
       expect(nqEngine.snapshot().timestamp).toBe(stateBefore.snapshot.timestamp);
     });
 
-    test("legacy checkpoints with undefined profileId restore without error", () => {
+    test("legacy checkpoints with undefined profileId restore into NQ without error", () => {
       const feed = new SyntheticMarketDataFeed({ seed: 101, profile: PROFILE_CME_NQ });
       const engine = new TrainingEngine(feed, null, { profile: PROFILE_CME_NQ });
       engine.stepForward(40);
@@ -415,9 +452,32 @@ describe("PHASE 10-C: MarketProfile Propagation & Market-Aware Replay", () => {
       engine.stepForward(20);
       expect(engine.eventIndex).toBe(60);
 
-      // Legacy restore should succeed
+      // Legacy restore into NQ succeeds for backward compatibility
       expect(() => engine.restoreCheckpoint(legacyCp)).not.toThrow();
       expect(engine.eventIndex).toBe(40);
+    });
+
+    test("legacy checkpoints with undefined profileId are rejected when restoring into non-NQ engines", () => {
+      const btcFeed = new SyntheticMarketDataFeed({ seed: 101, profile: PROFILE_BINANCE_BTCUSDT_SPOT });
+      const btcEngine = new TrainingEngine(btcFeed, null, { profile: PROFILE_BINANCE_BTCUSDT_SPOT });
+      btcEngine.stepForward(40);
+
+      const cp = btcEngine.captureCheckpoint();
+      const legacyCp: FlowEngineCheckpoint = {
+        eventIndex: cp.eventIndex,
+        sequence: cp.sequence,
+        timestamp: cp.timestamp,
+        feedPosition: cp.feedPosition,
+        orderFlow: cp.orderFlow,
+        dom: cp.dom,
+        priceSeries: cp.priceSeries,
+      };
+
+      expect(legacyCp.profileId).toBeUndefined();
+
+      expect(() => btcEngine.restoreCheckpoint(legacyCp)).toThrow(
+        /Legacy checkpoint without profileId cannot be restored into non-NQ profile 'BINANCE:BTCUSDT-SPOT' without explicit migration/,
+      );
     });
 
     test("checkpoint seek and rewind determinism is preserved", () => {

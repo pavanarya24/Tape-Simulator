@@ -113,6 +113,11 @@ export class TrainingEngine {
     truth: ScenarioTruth | null = null,
     options: TrainingEngineOptions = {},
   ) {
+    if (options.profile && feed.profile && options.profile.id !== feed.profile.id) {
+      throw new Error(
+        `MarketProfile mismatch: explicit options.profile '${options.profile.id}' conflicts with feed.profile '${feed.profile.id}'`,
+      );
+    }
     this.feed = feed;
     this.profile = options.profile ?? feed.profile ?? PROFILE_CME_NQ;
     this.truth = truth;
@@ -287,6 +292,11 @@ export class TrainingEngine {
     if (checkpoint.profileId !== undefined && checkpoint.profileId !== this.profile.id) {
       throw new Error(
         `Checkpoint profile mismatch: checkpoint tagged with '${checkpoint.profileId}' cannot be restored into engine configured with '${this.profile.id}'`,
+      );
+    }
+    if (checkpoint.profileId === undefined && this.profile.id !== PROFILE_CME_NQ.id) {
+      throw new Error(
+        `Legacy checkpoint without profileId cannot be restored into non-NQ profile '${this.profile.id}' without explicit migration`,
       );
     }
 

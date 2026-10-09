@@ -200,6 +200,11 @@ export class FlowTrainingSession {
   } | null = null;
 
   constructor(feed: MarketDataFeed, truth: ScenarioTruth | null = null, opts: FlowSessionOptions = {}) {
+    if (opts.profile && feed.profile && opts.profile.id !== feed.profile.id) {
+      throw new Error(
+        `MarketProfile mismatch: explicit opts.profile '${opts.profile.id}' conflicts with feed.profile '${feed.profile.id}'`,
+      );
+    }
     this.profile = opts.profile ?? feed.profile ?? PROFILE_CME_NQ;
     this.training = new TrainingEngine(feed, truth, {
       checkpointInterval: opts.checkpointInterval,
