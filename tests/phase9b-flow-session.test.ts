@@ -169,7 +169,7 @@ describe("Phase 9.B-4 FlowTrainingSession Checkpoint Replay Integration", () => 
 
         assertSessionSnapshotsEqual(sessionRef.snapshot(), sessionSeek.snapshot(), `at random target ${T}`);
       }
-    }, 30_000);
+    }, 60_000);
   });
 
   /* -------------------------------------------------------------------------

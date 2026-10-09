@@ -25,6 +25,8 @@
 
 import type { ContractSpec } from "../market/types";
 import { CONTRACTS } from "../market/instruments";
+import type { MarketProfile } from "../market/profile";
+import { PROFILE_CME_NQ } from "../market/registry";
 import type { MarketDataFeed } from "./feed";
 import type { FlowDifficulty, ScenarioTruth } from "./scenarios";
 import { TIME_STEP_MS, type FlowStepUnit } from "./replay";
@@ -61,6 +63,8 @@ export interface FlowSessionOptions {
   costs?: FlowCosts;
   risk?: FlowRisk;
   contract?: ContractSpec;
+  /** Optional market profile for tick scaling, range calculations, and compatibility. */
+  profile?: Readonly<MarketProfile>;
   /** Difficulty the scenario was generated at (Phase 8C breakdown metric). */
   difficulty?: FlowDifficulty;
   /** Checkpoint cadence in event count (default 10,000). */
@@ -167,6 +171,7 @@ function signed(n: number): string {
 }
 
 export class FlowTrainingSession {
+  readonly profile: Readonly<MarketProfile>;
   private readonly training: TrainingEngine;
   private readonly truth: ScenarioTruth | null;
   private readonly exec: FlowExecutionEngine;
@@ -195,7 +200,11 @@ export class FlowTrainingSession {
   } | null = null;
 
   constructor(feed: MarketDataFeed, truth: ScenarioTruth | null = null, opts: FlowSessionOptions = {}) {
-    this.training = new TrainingEngine(feed, truth, { checkpointInterval: opts.checkpointInterval });
+    this.profile = opts.profile ?? feed.profile ?? PROFILE_CME_NQ;
+    this.training = new TrainingEngine(feed, truth, {
+      checkpointInterval: opts.checkpointInterval,
+      profile: this.profile,
+    });
     this.truth = truth;
     this.sessionId = opts.sessionId ?? "flow-session";
     this.difficulty = opts.difficulty ?? "INTERMEDIATE";
@@ -380,7 +389,7 @@ export class FlowTrainingSession {
         }
         this.timelineCache = {
           maxIndex: target,
-          signature: FlowTrainingSession.signatureOf(recognizeFlow(this.training.snapshot())),
+          signature: FlowTrainingSession.signatureOf(recognizeFlow(this.training.snapshot(), this.profile)),
           entries: remainingEntries,
           lastAt: remainingLastAt,
         };
@@ -395,7 +404,7 @@ export class FlowTrainingSession {
    */
   private ensureRecognition(snap: TrainingSnapshot): FlowRecognition {
     if (!this.recognition || this.recognitionIndex !== snap.eventIndex) {
-      this.recognition = recognizeFlow(snap);
+      this.recognition = recognizeFlow(snap, this.profile);
       this.recognitionIndex = snap.eventIndex;
     }
     return this.recognition;
@@ -451,7 +460,7 @@ export class FlowTrainingSession {
         entries = this.timelineCache.entries;
         lastAt = this.timelineCache.lastAt;
         this.training.seekTo(cpIndex);
-        signature = FlowTrainingSession.signatureOf(recognizeFlow(this.training.snapshot()));
+        signature = FlowTrainingSession.signatureOf(recognizeFlow(this.training.snapshot(), this.profile));
       } else {
         index = this.timelineCache.maxIndex;
         signature = this.timelineCache.signature;
@@ -467,14 +476,14 @@ export class FlowTrainingSession {
       entries = [];
       lastAt = new Map<string, number>();
       this.training.seekTo(cpIndex);
-      signature = FlowTrainingSession.signatureOf(recognizeFlow(this.training.snapshot()));
+      signature = FlowTrainingSession.signatureOf(recognizeFlow(this.training.snapshot(), this.profile));
     }
 
     while (index < target) {
       this.training.stepForward(1);
       index++;
       const snap = this.training.snapshot();
-      const rec = recognizeFlow(snap);
+      const rec = recognizeFlow(snap, this.profile);
       const next = FlowTrainingSession.signatureOf(rec);
       // No timeline before the recogniser has enough data — early-session
       // readings are noise, not a story (deterministic: priceSeries length).

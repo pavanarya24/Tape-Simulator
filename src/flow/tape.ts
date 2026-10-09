@@ -12,6 +12,7 @@
  */
 
 import type { Aggressor, TradeEvent } from "./events";
+import type { MarketProfile } from "../market/profile";
 
 export type TapeFilter = "ALL" | "BUY" | "SELL" | "LARGE";
 export const TAPE_FILTERS: readonly TapeFilter[] = ["ALL", "BUY", "SELL", "LARGE"];
@@ -26,6 +27,7 @@ export interface TapeOptions {
   sweepMultiple?: number;
   burstWindowMs?: number;
   burstMinPrints?: number;
+  profile?: Readonly<MarketProfile>;
 }
 
 export interface TapeRow {
@@ -76,24 +78,31 @@ export function buildTapeRows(
     burstMinPrints = TAPE_BURST_MIN_PRINTS,
   } = opts;
 
-  const sizes = tape.map((t) => t.size);
-  const med = Math.max(1, median(sizes));
-  const maxSize = Math.max(1, ...sizes);
+  // Filter valid, strictly positive trade sizes for robust baseline statistics
+  const positiveSizes = tape
+    .map((t) => t.size)
+    .filter((s) => Number.isFinite(s) && s > 0);
+
+  const med = median(positiveSizes);
+  const maxSize = positiveSizes.length > 0 ? Math.max(...positiveSizes) : 0;
 
   const rows: TapeRow[] = tape.map((t) => {
-    const large = t.size >= med * largeMultiple;
+    const validSize = Number.isFinite(t.size) && t.size > 0 ? t.size : 0;
+    const large = med > 0 && validSize >= med * largeMultiple;
     const burst =
       tape.filter((o) => Math.abs(o.timestamp - t.timestamp) <= burstWindowMs).length >= burstMinPrints;
+    const relativeSize =
+      maxSize > 0 && validSize > 0 ? Math.round((validSize / maxSize) * 10_000) / 10_000 : 0;
     return {
       sequence: t.sequence,
       timestamp: t.timestamp,
       price: t.price,
       size: t.size,
       aggressorSide: t.aggressorSide,
-      relativeSize: Math.round((t.size / maxSize) * 10_000) / 10_000,
+      relativeSize,
       large,
       burst,
-      sweepLike: large && t.size >= med * sweepMultiple && t.aggressorSide !== "UNKNOWN",
+      sweepLike: large && med > 0 && validSize >= med * sweepMultiple && t.aggressorSide !== "UNKNOWN",
     };
   });
 

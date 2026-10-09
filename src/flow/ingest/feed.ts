@@ -14,12 +14,14 @@
 import type { MarketEvent, NormalizedMarketEvent } from "../events";
 import type { MarketDataFeed } from "../feed";
 import type { IngestionValidationReport, InstrumentDefinition, MicrostructureCapabilities } from "./types";
+import type { MarketProfile } from "../../market/profile";
 
 export interface RealMarketDataFeedOptions {
   source?: string;
   capabilities?: MicrostructureCapabilities;
   validationReport?: IngestionValidationReport;
   instrument?: InstrumentDefinition;
+  profile?: Readonly<MarketProfile>;
 }
 
 export class RealMarketDataFeed implements MarketDataFeed {
@@ -28,6 +30,7 @@ export class RealMarketDataFeed implements MarketDataFeed {
   readonly capabilities?: MicrostructureCapabilities;
   readonly validationReport?: IngestionValidationReport;
   readonly instrument?: InstrumentDefinition;
+  readonly profile?: Readonly<MarketProfile>;
 
   private readonly eventsArr: readonly NormalizedMarketEvent[];
   private cursor = 0;
@@ -38,6 +41,7 @@ export class RealMarketDataFeed implements MarketDataFeed {
     this.capabilities = opts.capabilities;
     this.validationReport = opts.validationReport;
     this.instrument = opts.instrument;
+    this.profile = opts.profile;
   }
 
   reset(): void {
