@@ -14,6 +14,7 @@
 
 import type { MarketEvent } from "./events";
 import type { MarketProfile } from "../market/profile";
+import type { IngestionValidationReport } from "./ingest/types";
 
 export interface MarketDataFeed {
   /** Stable, user-facing label. Synthetic data must identify itself. */
@@ -22,6 +23,8 @@ export interface MarketDataFeed {
   readonly isRealData: boolean;
   /** Optional associated MarketProfile definition. */
   readonly profile?: Readonly<MarketProfile>;
+  /** Adapter validation evidence for recorded/vendor-normalized feeds; absent for synthetic feeds. */
+  readonly validationReport?: IngestionValidationReport;
 
   /** Rewind to the very beginning (before the first event). */
   reset(): void;

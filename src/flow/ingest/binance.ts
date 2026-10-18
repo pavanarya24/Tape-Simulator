@@ -210,7 +210,13 @@ export class BinanceAdapter implements MarketDataAdapter<string | BinanceRawMess
       if (this.isSnapshot(message)) {
         const state = this.newBookState(message.lastUpdateId, message.bids, message.asks);
         books.set(symbol, state);
-        const timestamp = this.requireTime(message.T ?? message.E, i);
+        let timestamp = this.requireTime(message.T ?? message.E, i);
+        // Anchor snapshot timestamp to the first contiguous stream update if the capture's
+        // REST wall-clock timestamp is later than buffered stream events that build on it.
+        const contiguousTime = this.findFirstContiguousStreamTime(records, i + 1, message.lastUpdateId, symbolFilter);
+        if (contiguousTime !== undefined && contiguousTime < timestamp) {
+          timestamp = contiguousTime;
+        }
         emit({ kind: "book-reset", timestamp, symbol }, i);
         this.emitSnapshotDeltas(state, timestamp, symbol, emit, i);
         continue;
@@ -240,9 +246,12 @@ export class BinanceAdapter implements MarketDataAdapter<string | BinanceRawMess
           continue;
         }
         const expected = state.lastUpdateId + 1;
+        // Binance USDⓈ-M Futures diff-depth streams define continuity through `pu`.
+        // Do not silently fall back to Spot's U/u overlap rule when a Futures frame
+        // omits `pu`; accepting it could hide a missing update in the book sequence.
         const contiguous =
-          options.market === "usdm" && message.pu !== undefined
-            ? message.pu === state.lastUpdateId && message.u >= expected
+          options.market === "usdm"
+            ? message.pu !== undefined && message.pu === state.lastUpdateId && message.u >= expected
             : message.U <= expected && message.u >= expected;
         if (message.u <= state.lastUpdateId) continue;
         if (!contiguous) {
@@ -252,8 +261,7 @@ export class BinanceAdapter implements MarketDataAdapter<string | BinanceRawMess
           validator.validateEvent(null, i);
           continue;
         }
-        this.emitDepthUpdates(message.b, "bid", state.bids, depthTime, symbol, emit, i);
-        this.emitDepthUpdates(message.a, "ask", state.asks, depthTime, symbol, emit, i);
+        this.emitOrderedDepthUpdates(message.b, message.a, state, depthTime, symbol, emit, i);
         state.lastUpdateId = message.u;
         continue;
       }
@@ -314,6 +322,103 @@ export class BinanceAdapter implements MarketDataAdapter<string | BinanceRawMess
   ): void {
     for (const [price, size] of this.sortedLevels(state.bids, "bid")) emit({ kind: "depth-delta", timestamp, symbol, side: "bid", action: "add", price, size }, recordIndex);
     for (const [price, size] of this.sortedLevels(state.asks, "ask")) emit({ kind: "depth-delta", timestamp, symbol, side: "ask", action: "add", price, size }, recordIndex);
+  }
+
+  private emitOrderedDepthUpdates(
+    bids: BinanceLevel[],
+    asks: BinanceLevel[],
+    state: BookState,
+    timestamp: number,
+    symbol: string,
+    emit: (event: BinanceEventDraft, recordIndex: number) => void,
+    recordIndex: number,
+  ): void {
+    const curBestBid = this.getBestPrice(state.bids, "bid");
+    const curBestAsk = this.getBestPrice(state.asks, "ask");
+    const maxNewBid = this.getMaxNonZeroPrice(bids);
+    const minNewAsk = this.getMinNonZeroPrice(asks);
+
+    const marketMovesUp = maxNewBid >= curBestAsk;
+    const marketMovesDown = minNewAsk <= curBestBid;
+
+    if (marketMovesUp && !marketMovesDown) {
+      // Market stepped up: clear resting asks before placing higher bids to avoid false crossed book
+      this.emitDepthUpdates(asks, "ask", state.asks, timestamp, symbol, emit, recordIndex);
+      this.emitDepthUpdates(bids, "bid", state.bids, timestamp, symbol, emit, recordIndex);
+    } else if (marketMovesDown && !marketMovesUp) {
+      // Market stepped down: clear resting bids before placing lower asks to avoid false crossed book
+      this.emitDepthUpdates(bids, "bid", state.bids, timestamp, symbol, emit, recordIndex);
+      this.emitDepthUpdates(asks, "ask", state.asks, timestamp, symbol, emit, recordIndex);
+    } else if (marketMovesUp && marketMovesDown) {
+      // Both sides encroaching: clear deletions across both sides first, then additions
+      const askDels = asks.filter(([, s]) => Number(s) === 0);
+      const bidDels = bids.filter(([, s]) => Number(s) === 0);
+      const askAdds = asks.filter(([, s]) => Number(s) > 0);
+      const bidAdds = bids.filter(([, s]) => Number(s) > 0);
+      this.emitDepthUpdates(askDels, "ask", state.asks, timestamp, symbol, emit, recordIndex);
+      this.emitDepthUpdates(bidDels, "bid", state.bids, timestamp, symbol, emit, recordIndex);
+      this.emitDepthUpdates(bidAdds, "bid", state.bids, timestamp, symbol, emit, recordIndex);
+      this.emitDepthUpdates(askAdds, "ask", state.asks, timestamp, symbol, emit, recordIndex);
+    } else {
+      // Natural default order: bids then asks
+      this.emitDepthUpdates(bids, "bid", state.bids, timestamp, symbol, emit, recordIndex);
+      this.emitDepthUpdates(asks, "ask", state.asks, timestamp, symbol, emit, recordIndex);
+    }
+  }
+
+  private getBestPrice(book: Map<number, number>, side: BookSide): number {
+    if (book.size === 0) return side === "bid" ? -Infinity : Infinity;
+    let best = side === "bid" ? -Infinity : Infinity;
+    for (const [p, s] of book.entries()) {
+      if (s > 0) {
+        if (side === "bid" && p > best) best = p;
+        else if (side === "ask" && p < best) best = p;
+      }
+    }
+    return best;
+  }
+
+  private getMaxNonZeroPrice(levels: BinanceLevel[]): number {
+    let max = -Infinity;
+    for (const [p, s] of levels) {
+      const price = Number(p);
+      const size = Number(s);
+      if (size > 0 && price > max) max = price;
+    }
+    return max;
+  }
+
+  private getMinNonZeroPrice(levels: BinanceLevel[]): number {
+    let min = Infinity;
+    for (const [p, s] of levels) {
+      const price = Number(p);
+      const size = Number(s);
+      if (size > 0 && price < min) min = price;
+    }
+    return min;
+  }
+
+  private findFirstContiguousStreamTime(
+    records: unknown[],
+    startIndex: number,
+    lastUpdateId: number,
+    symbolFilter?: string,
+  ): number | undefined {
+    const expected = lastUpdateId + 1;
+    for (let j = startIndex; j < records.length; j++) {
+      const raw = records[j];
+      const m = this.unwrap(raw as BinanceRawMessage);
+      if (symbolFilter && this.symbolOf(m, symbolFilter) !== symbolFilter) continue;
+      if (this.isDepthUpdate(m)) {
+        const U = m.U;
+        const u = m.u;
+        if (U !== undefined && u !== undefined && U <= expected && u >= expected) {
+          const t = m.T ?? m.E;
+          if (typeof t === "number" && Number.isFinite(t)) return t;
+        }
+      }
+    }
+    return undefined;
   }
 
   private emitDepthUpdates(

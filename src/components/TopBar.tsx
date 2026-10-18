@@ -90,29 +90,38 @@ export function TopBar({ state }: { state: AppState }) {
           ))}
         </select>
         <button className="btn sm" title="Previous session" onClick={() => void controller.stepSession(-1)}>
-          ◀
+          ←
         </button>
         <button className="btn sm" title="Next session" onClick={() => void controller.stepSession(1)}>
-          ▶
+          →
         </button>
         <button className="btn sm" title="Random session" onClick={() => void controller.randomSession()}>
-          ⤫
+          ⚄
         </button>
       </div>
 
       <div className="tb-group grow">
         <span className="sim-badge">
           <span className={`dot ${engine?.playing ? "live" : "paused"}`} />
-          SIMULATED TRADING — HISTORICAL REPLAY
+          SIMULATED TRADING · HISTORICAL REPLAY
         </span>
         {state.datasets.some((d) => d.meta.source === "DEMO") && (
-          <span className="badge demo" title="Synthetic demo dataset — import real CSVs on the Data page">
+          <span className="badge demo" title="Synthetic demo dataset · import real CSVs on the Data page">
             DEMO DATA
           </span>
         )}
         <span className="tb-label mono">{timeframeLabel(datasetTimeframe)} bars</span>
         <a className="navbtn" href="/academy.html" target="_blank" rel="noreferrer">
           Academy ↗
+        </a>
+        <a
+          className="navbtn"
+          href="https://github.com/pavanarya24/Tape-Simulator/issues/new?template=feedback.yml"
+          target="_blank"
+          rel="noreferrer"
+          title="Report a bug or share feedback about the Tape Lab beta"
+        >
+          Feedback ↗
         </a>
       </div>
 

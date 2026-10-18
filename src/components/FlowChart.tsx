@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { controller } from "../state/app";
 import {
   createChart,
@@ -66,6 +66,12 @@ interface FlowChartProps {
   coarseContext?: boolean;
   /** Active market profile for price precision, tick sizing and quote currency */
   marketProfile?: Readonly<MarketProfile>;
+  /** Real data feed mode flags and metadata */
+  dataSourceId?: string;
+  isRealData?: boolean;
+  isTradeOnly?: boolean;
+  lastPrice?: number;
+  currentTimestamp?: number;
 }
 
 /* -------------------------------------------------------------------------
@@ -650,8 +656,14 @@ export function drawFlowChart(
  * Chart-side Volume Profile gutter (spec §8B.1).
  * Displays buy/sell horizontal volume bars hugging price levels.
  */
-export function VolumeProfileGutter({ profile }: { profile: VolumeAtPrice[] }) {
-  const data = adaptVolumeProfile(profile);
+export function VolumeProfileGutter({
+  profile,
+  precision,
+}: {
+  profile: VolumeAtPrice[];
+  precision?: number;
+}) {
+  const data = adaptVolumeProfile(profile, precision);
   if (data.items.length === 0) return null;
 
   // Render highest price at the top, descending to match the price axis
@@ -753,7 +765,17 @@ export function VolumeProfileGutter({ profile }: { profile: VolumeAtPrice[] }) {
   );
 }
 
+const CHART_INTERVALS = [
+  { label: "1s", ms: 1_000 },
+  { label: "5s", ms: 5_000 },
+  { label: "15s", ms: 15_000 },
+  { label: "1m", ms: 60_000 },
+  { label: "5m", ms: 300_000 },
+  { label: "Auto", ms: null },
+] as const;
+
 function FlowChartInner(props: FlowChartProps) {
+  const [timeframeMs, setTimeframeMs] = useState<number | null>(5_000);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -764,6 +786,8 @@ function FlowChartInner(props: FlowChartProps) {
   const prevPointsCountRef = useRef<number>(0);
   const prevBucketMsRef = useRef<number>(0);
   const prevCandlesCountRef = useRef<number>(0);
+  const prevDataSourceIdRef = useRef<string | undefined>(props.dataSourceId);
+  const prevProfileIdRef = useRef<string | undefined>(props.marketProfile?.id);
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -827,6 +851,17 @@ function FlowChartInner(props: FlowChartProps) {
     const wrap = wrapRef.current;
     if (!candleSeries || !vwapSeries || !amaSeries || !chart || !wrap) return;
 
+    // Detect source or market profile changes and reset tracking to prevent stale candles
+    const sourceChanged = props.dataSourceId !== prevDataSourceIdRef.current;
+    const profileChanged = props.marketProfile?.id !== prevProfileIdRef.current;
+    if (sourceChanged || profileChanged) {
+      prevPointsCountRef.current = 0;
+      prevCandlesCountRef.current = 0;
+      prevBucketMsRef.current = 0;
+      prevDataSourceIdRef.current = props.dataSourceId;
+      prevProfileIdRef.current = props.marketProfile?.id;
+    }
+
     if (props.marketProfile) {
       candleSeries.applyOptions({
         priceFormat: {
@@ -855,12 +890,18 @@ function FlowChartInner(props: FlowChartProps) {
     const span = Math.max(1, tEnd - t0);
     const plotW = wrap.clientWidth || 800;
     const target = Math.max(30, Math.min(90, Math.floor(plotW / 11)));
-    const effectiveTarget = props.coarseContext ? Math.max(8, Math.round(target / 3)) : target;
-    const bucketMs = pickBucketMs(span, effectiveTarget);
+    const autoBucketMs = pickBucketMs(
+      span,
+      props.coarseContext ? Math.max(8, Math.round(target / 3)) : target,
+    );
+    // Fixed intervals keep candle meaning stable as replay progresses.
+    const bucketMs = timeframeMs ?? autoBucketMs;
     const rawCandles = buildCandles(props.priceSeries, bucketMs);
     const adaptedCandles = toCandlestickData(rawCandles);
 
     const canIncremental =
+      !sourceChanged &&
+      !profileChanged &&
       bucketMs === prevBucketMsRef.current &&
       prevCandlesCountRef.current > 0 &&
       (adaptedCandles.length === prevCandlesCountRef.current ||
@@ -927,7 +968,7 @@ function FlowChartInner(props: FlowChartProps) {
     });
     seriesMarkersRef.current?.setMarkers(adaptedMarkers);
 
-    if (prevPointsCountRef.current === 0 && adaptedCandles.length > 0) {
+    if ((prevPointsCountRef.current === 0 || sourceChanged) && adaptedCandles.length > 0) {
       chart.timeScale().fitContent();
     }
     prevPointsCountRef.current = props.priceSeries.length;
@@ -946,6 +987,9 @@ function FlowChartInner(props: FlowChartProps) {
     props.showAnnotations,
     props.trades,
     props.showTradeMarkers,
+    props.marketProfile,
+    props.dataSourceId,
+    timeframeMs,
   ]);
 
   return (
@@ -971,26 +1015,145 @@ function FlowChartInner(props: FlowChartProps) {
           position: "relative",
         }}
       >
+        <div className="flow-chart-intervals" role="group" aria-label="Candle interval">
+          <span className="flow-chart-interval-label">BAR</span>
+          {CHART_INTERVALS.map((interval) => (
+            <button
+              key={interval.label}
+              type="button"
+              className={timeframeMs === interval.ms ? "flow-chart-interval is-active" : "flow-chart-interval"}
+              aria-pressed={timeframeMs === interval.ms}
+              onClick={() => setTimeframeMs(interval.ms)}
+            >
+              {interval.label}
+            </button>
+          ))}
+        </div>
+        {/* Professional Workstation Status HUD */}
+        <div
+          className="flow-chart-hud"
+          style={{
+            position: "absolute",
+            top: 8,
+            left: 12,
+            zIndex: 10,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            pointerEvents: "none",
+            fontSize: 11,
+            fontFamily: "'IBM Plex Mono', monospace",
+            lineHeight: 1,
+          }}
+        >
+          <span style={{ fontWeight: 600, color: "#f0f4f8", letterSpacing: "0.04em" }}>
+            {props.marketProfile ? props.marketProfile.identity.symbol : "NQ"}
+          </span>
+          <span style={{ color: "#7c8894", fontSize: 10 }}>
+            {props.marketProfile ? props.marketProfile.identity.venue : "CME"}
+          </span>
+          <span
+            style={{
+              padding: "2px 5px",
+              borderRadius: 3,
+              fontSize: 9,
+              letterSpacing: "0.05em",
+              background: props.isRealData
+                ? props.isTradeOnly
+                  ? "rgba(230, 169, 60, 0.18)"
+                  : "rgba(34, 211, 238, 0.16)"
+                : "rgba(167, 139, 250, 0.16)",
+              color: props.isRealData
+                ? props.isTradeOnly
+                  ? "#e6a93c"
+                  : "#22d3ee"
+                : "#a78bfa",
+              border: `1px solid ${
+                props.isRealData
+                  ? props.isTradeOnly
+                    ? "rgba(230, 169, 60, 0.35)"
+                    : "rgba(34, 211, 238, 0.35)"
+                  : "rgba(167, 139, 250, 0.35)"
+              }`,
+            }}
+          >
+            {props.isRealData
+              ? props.isTradeOnly
+                ? "HISTORICAL AGGTRADES (TRADE PRINTS ONLY)"
+                : "GENUINE CAPTURE REPLAY"
+              : "SYNTHETIC PRACTICE"}
+          </span>
+          {props.lastPrice !== undefined && props.lastPrice > 0 && (
+            <span style={{ color: "#2fbf71", fontWeight: 600, fontSize: 11, marginLeft: 4 }}>
+              LAST {fmtPrice(props.lastPrice, props.marketProfile?.pricing.pricePrecision)}
+            </span>
+          )}
+          {props.currentTimestamp !== undefined && props.currentTimestamp > 0 && (
+            <span style={{ color: "#55606b", fontSize: 10, marginLeft: 4 }}>
+              {new Date(props.currentTimestamp).toISOString().replace("T", " ").replace("Z", " UTC")}
+            </span>
+          )}
+        </div>
+
         {props.priceSeries.length === 0 && (
           <div
+            className="flow-chart-empty-state"
             style={{
               position: "absolute",
               top: "50%",
               left: 16,
+              right: 16,
               transform: "translateY(-50%)",
-              color: "#55606b",
+              color: "#7c8894",
               fontFamily: "'IBM Plex Mono', monospace",
               fontSize: 12,
               pointerEvents: "none",
+              background: "rgba(11, 15, 20, 0.85)",
+              border: "1px solid #161b21",
+              borderRadius: 4,
+              padding: "16px 20px",
+              maxWidth: 580,
             }}
           >
-            Generate a scenario, then step or play to reveal the tape.
+            {props.isRealData ? (
+              props.isTradeOnly ? (
+                <div>
+                  <div style={{ color: "#e6a93c", fontWeight: 600, marginBottom: 4 }}>
+                    HISTORICAL TRADE ARCHIVE REPLAY
+                  </div>
+                  <div style={{ color: "#7c8894", fontSize: 11, lineHeight: 1.5 }}>
+                    Replay starting at beginning of capture. Historical trade prints will populate the tape and build candles as you step or play forward.
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ color: "#22d3ee", fontWeight: 600, marginBottom: 4 }}>
+                    ORDER-BOOK DEPTH INITIALIZED · WAITING FOR TRADES
+                  </div>
+                  <div style={{ color: "#7c8894", fontSize: 11, lineHeight: 1.5 }}>
+                    Initial Level 2 depth snapshot and diff updates are active in the order book. Step or play forward (or seek forward) to stream trade executions and construct candlestick series.
+                  </div>
+                </div>
+              )
+            ) : (
+              <div>
+                <div style={{ color: "#a78bfa", fontWeight: 600, marginBottom: 4 }}>
+                  SYNTHETIC PRACTICE DRILL
+                </div>
+                <div style={{ color: "#7c8894", fontSize: 11, lineHeight: 1.5 }}>
+                  Generate a scenario, then step or play to reveal the tape.
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
 
       {props.showProfile && props.profile.length > 0 && (
-        <VolumeProfileGutter profile={props.profile} />
+        <VolumeProfileGutter
+          profile={props.profile}
+          precision={props.marketProfile?.pricing.pricePrecision}
+        />
       )}
     </div>
   );

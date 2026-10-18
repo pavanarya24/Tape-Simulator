@@ -104,7 +104,15 @@ import { computeFlowAnalytics, type FlowAnalytics } from "../flow/analytics";
 import { buildFlowReview, type FlowReview } from "../flow/review";
 import { diffBook, type BookChange, type BookView } from "../flow/domDiff";
 import type { MarketProfile } from "../market/profile";
+import type { IngestionValidationReport } from "../flow/ingest/types";
 import { PROFILE_CME_NQ, requireMarketProfile } from "../market/registry";
+import {
+  type FlowDataSourceId,
+  getDataSourceMeta,
+  loadBinanceGenuineSpotFeed,
+  loadDatabentoGenuineNqFeed,
+  loadBinanceHistoricalTradesFeed,
+} from "../flow/ingest";
 
 /** Opening ranges are defined against the 09:30 America/New_York cash open. */
 const OR_ANCHOR_TZ = "America/New_York";
@@ -139,6 +147,12 @@ export interface FlowState {
   profile: Readonly<MarketProfile>;
   source: string;
   isRealData: boolean;
+  dataSourceId: FlowDataSourceId;
+  isTradeOnly: boolean;
+  schemaDetails: string;
+  /** Adapter-reported integrity evidence; absent for synthetic scenarios. */
+  validationReport?: IngestionValidationReport;
+  capturedAt?: string;
   eventIndex: number;
   totalEvents: number;
   atStart: boolean;
@@ -221,6 +235,9 @@ const FLOW_IDLE: FlowState = {
   profile: PROFILE_CME_NQ,
   source: "Synthetic Training Data",
   isRealData: false,
+  dataSourceId: "synthetic",
+  isTradeOnly: false,
+  schemaDetails: "Procedural microstructural generator",
   eventIndex: 0,
   totalEvents: 0,
   atStart: true,
@@ -327,6 +344,8 @@ export class TapeLabController {
   /** Active MarketProfile for synthetic generation and replay. Defaults to CME:NQ. */
   private flowProfile: Readonly<MarketProfile> = PROFILE_CME_NQ;
   private flowPattern: FlowScenarioId | "any" = "any";
+  private flowDataSourceId: FlowDataSourceId = "synthetic";
+  private flowValidationReport: IngestionValidationReport | undefined;
   /** Simulated cost/risk settings persist across scenario generations. */
   private flowCosts: FlowCosts = { ...DEFAULT_FLOW_COSTS };
   private flowRisk: FlowRisk = { ...DEFAULT_FLOW_RISK };
@@ -990,11 +1009,17 @@ export class TapeLabController {
   /* ------------------------- order-flow training ------------------------- */
 
   private flowState(): FlowState {
+    const dsMeta = getDataSourceMeta(this.flowDataSourceId);
     const session = this.flowSession;
     if (!session) {
       return {
         ...FLOW_IDLE,
         profile: this.flowProfile,
+        dataSourceId: this.flowDataSourceId,
+        isTradeOnly: dsMeta.isTradeOnly,
+        schemaDetails: dsMeta.schemaDetails,
+        validationReport: this.flowValidationReport,
+        capturedAt: dsMeta.capturedAt,
       };
     }
     const snap = session.snapshot();
@@ -1021,6 +1046,11 @@ export class TapeLabController {
       profile: snap.profile,
       source: snap.source,
       isRealData: snap.isRealData,
+      dataSourceId: this.flowDataSourceId,
+      isTradeOnly: dsMeta.isTradeOnly,
+      schemaDetails: dsMeta.schemaDetails,
+      validationReport: this.flowValidationReport,
+      capturedAt: dsMeta.capturedAt,
       eventIndex: snap.eventIndex,
       totalEvents: snap.totalEvents,
       atStart: snap.atStart,
@@ -1077,6 +1107,12 @@ export class TapeLabController {
     const profile = requireMarketProfile(profileId);
     if (this.flowProfile.id === profile.id) return;
     this.flowProfile = profile;
+    if (this.flowDataSourceId !== "synthetic") {
+      const meta = getDataSourceMeta(this.flowDataSourceId);
+      if (meta.targetProfileId !== profile.id) {
+        this.flowDataSourceId = "synthetic";
+      }
+    }
     if (profile.execution.defaultFeeModel === "basis_points_notional") {
       this.flowCosts = {
         ...this.flowCosts,
@@ -1106,12 +1142,56 @@ export class TapeLabController {
   }
 
   /**
+   * Set active data source in Flow Lab: synthetic practice scenario, genuine exchange capture,
+   * or historical trade archive. Handles safe session boundary reset.
+   */
+  setFlowDataSource(id: FlowDataSourceId): void {
+    if (id === "synthetic") {
+      this.flowDataSourceId = "synthetic";
+      this.generateFlowScenario(this.flowPattern);
+      this.flowSession?.reset();
+      this.clearFlowBookTracking();
+      this.flowScheduler.reset();
+      this.flowScheduler.flush();
+      return;
+    }
+
+    try {
+      getDataSourceMeta(id);
+      let feed: MarketDataFeed;
+      switch (id) {
+        case "binance-genuine-spot":
+          feed = loadBinanceGenuineSpotFeed();
+          break;
+        case "databento-genuine-nq":
+          feed = loadDatabentoGenuineNqFeed();
+          break;
+        case "binance-historical-trades":
+          feed = loadBinanceHistoricalTradesFeed();
+          break;
+        default:
+          throw new Error(`Unsupported data source: ${id}`);
+      }
+
+      this.flowDataSourceId = id;
+      this.loadRealFlowFeed(feed, undefined, { resetToZero: true });
+    } catch (err) {
+      this.message =
+        err instanceof Error
+          ? `Failed to load data source: ${err.message}`
+          : "Failed to load data source.";
+      this.notify();
+    }
+  }
+
+  /**
    * Generate a fresh deterministic order-flow scenario. `"any"` picks a random
    * pattern; a specific id generates exactly that pattern. The seed is drawn
    * from wall-clock entropy, but once generated the session is fully
    * deterministic (same id + seed ⇒ identical events and truth).
    */
   generateFlowScenario(pattern: FlowScenarioId | "any", profileId?: string): void {
+    this.flowDataSourceId = "synthetic";
     if (profileId) {
       this.flowProfile = requireMarketProfile(profileId);
     }
@@ -1154,9 +1234,27 @@ export class TapeLabController {
    * Load an external real market data feed (e.g. from Databento CME or generic adapter).
    * Operates safely without synthetic ScenarioTruth, preserving honest isRealData reporting.
    */
-  loadRealFlowFeed(feed: MarketDataFeed, contract?: ContractSpec): void {
+  loadRealFlowFeed(
+    feed: MarketDataFeed,
+    contract?: ContractSpec,
+    opts: { resetToZero?: boolean } = {},
+  ): void {
+    this.flowValidationReport = feed.validationReport;
     const profile = feed.profile ?? this.flowProfile;
     this.flowProfile = profile;
+    if (profile.execution.defaultFeeModel === "basis_points_notional") {
+      this.flowCosts = {
+        ...this.flowCosts,
+        feeModel: "basis_points_notional",
+        feeRate: profile.execution.defaultFeeRate ?? 0.0005,
+      };
+    } else {
+      this.flowCosts = {
+        ...this.flowCosts,
+        feeModel: "per_contract_fixed",
+        commissionPerContract: profile.execution.defaultFeeRate ?? 2.25,
+      };
+    }
     this.flowScenarioSeq++;
     this.flowSession = new FlowTrainingSession(feed, null, {
       sessionId: `real-${this.flowScenarioSeq}`,
@@ -1166,6 +1264,7 @@ export class TapeLabController {
       contract: contract ?? (profile.identity.symbol === "ES" ? CONTRACTS.ES : CONTRACTS.NQ),
       difficulty: this.flowDifficulty,
     });
+    this.flowSession.setOrderQty(profile.units.minOrderQuantity);
     this.flowTruth = null;
     this.flowRevealed = false;
     this.flowHeld = false;
@@ -1173,7 +1272,11 @@ export class TapeLabController {
     this.flowPrevIndex = -1;
     this.flowBookChanges = [];
     if (this.flowReplayMode === "REVIEW") this.flowReplayMode = "LIVE";
-    this.flowSession.warmup(Math.min(FLOW_WARMUP, feed.totalEvents()));
+    if (opts.resetToZero ?? true) {
+      this.flowSession.reset();
+    } else {
+      this.flowSession.warmup(Math.min(FLOW_WARMUP, feed.totalEvents()));
+    }
     this.clearFlowBookTracking();
     this.flowScheduler.reset();
     this.flowScheduler.flush();
@@ -1235,8 +1338,11 @@ export class TapeLabController {
     const session = this.flowSession;
     if (!session) return false;
     const clamped = Math.max(0, Math.min(Math.round(index), session.totalEvents));
-    // No reading ahead while blind.
-    if (!this.reviewNavigationAllowed() && clamped > session.eventIndex) return false;
+    // No reading ahead while blind in synthetic training scenarios with hidden scenario truth.
+    // Real data replays have no hidden outcome and allow full forward and backward scrub.
+    if (this.flowTruth !== null && !this.reviewNavigationAllowed() && clamped > session.eventIndex) {
+      return false;
+    }
     // Moving BACK past an open position's entry is refused so an entry can
     // never be replayed against a rewound clock (forward seeks stay legal).
     if (clamped < session.eventIndex && session.snapshot().position.side !== "FLAT") {

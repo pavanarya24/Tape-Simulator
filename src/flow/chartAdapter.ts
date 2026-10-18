@@ -300,6 +300,7 @@ export function adaptCvdToSeriesData(
  */
 export function adaptVolumeProfile(
   profile: VolumeAtPrice[] | null | undefined,
+  precision?: number,
 ): VolumeProfileRenderData {
   if (!profile || profile.length === 0) {
     return { items: [], maxTotal: 0, formattedMax: "0" };
@@ -312,7 +313,7 @@ export function adaptVolumeProfile(
     const widthPct = Math.min(100, (p.total / maxTotal) * 100);
     return {
       price: p.price,
-      formattedPrice: fmtPrice(p.price),
+      formattedPrice: fmtPrice(p.price, precision),
       buy: p.buy,
       sell: p.sell,
       total: p.total,
@@ -398,6 +399,8 @@ export function getCandlestickSeriesOptions(profile?: Readonly<MarketProfile>): 
     wickVisible: true,
     wickUpColor: CHART_THEME.up,
     wickDownColor: CHART_THEME.down,
+    priceLineVisible: true,
+    lastValueVisible: true,
     priceFormat: profile
       ? {
           type: "price",

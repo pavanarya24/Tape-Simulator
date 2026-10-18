@@ -1,0 +1,40 @@
+name: Tape Lab beta feedback
+description: Report a bug or share feedback about the public beta
+title: "[Beta feedback]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying Tape Lab. Please do not include account numbers, passwords, API keys, or other private information.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Feedback type
+      options:
+        - Bug / something is broken
+        - Chart or usability improvement
+        - Confusing behavior
+        - Feature request
+        - General feedback
+    validations:
+      required: true
+  - type: input
+    id: page
+    attributes:
+      label: Where did it happen?
+      placeholder: Terminal, Flow Lab, Data, Journal...
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What happened or what would you change?
+      description: Include steps to reproduce the problem if relevant.
+      placeholder: I expected... but instead...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Browser and device (optional)
+      placeholder: Firefox on Windows 11

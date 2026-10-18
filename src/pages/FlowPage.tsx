@@ -11,6 +11,7 @@ import type { Level } from "../flow/dom";
 import { formatCurrency, formatSignedCurrency, pct, pnlClass, price as fmtPrice } from "../util/format";
 import { listMarketProfiles } from "../market/registry";
 import type { MarketProfile } from "../market/profile";
+import { FLOW_DATA_SOURCES, summarizeFeedIntegrity, type FlowDataSourceId } from "../flow/ingest";
 /* --- Phase 8 modules --- */
 import {
   FLOW_REPLAY_MODES,
@@ -88,6 +89,7 @@ function tapeTime(t: number): string {
 
 export function FlowPage({ state }: { state: AppState }) {
   const flow = state.flow;
+  const feedIntegrity = summarizeFeedIntegrity(flow.validationReport);
   const [pattern, setPattern] = useState<FlowScenarioId | "any">("any");
   const [showVwap, setShowVwap] = useState(true);
   const [showCvd, setShowCvd] = useState(true);
@@ -218,11 +220,21 @@ export function FlowPage({ state }: { state: AppState }) {
       </p>
 
       <div className="callout info flow-honesty">
-        <span className="badge mono">{flow.isRealData ? "GENUINE MARKET DATA" : "SYNTHETIC TRAINING DATA"}</span>{" "}
-        <span className="badge mono">{flow.isRealData ? "REPLAY VERIFIED" : "SIMULATED TRADING — SYNTHETIC MARKET DATA"}</span>{" "}
+        <span className="badge mono">
+          {flow.isRealData ? "GENUINE EXCHANGE CAPTURE — HISTORICAL REPLAY" : "SYNTHETIC TRAINING DATA"}
+        </span>{" "}
+        <span className={`badge mono ${flow.isRealData ? (flow.isTradeOnly ? "warn" : "ok") : ""}`}>
+          {flow.isRealData
+            ? flow.isTradeOnly
+              ? "TRADE PRINTS ONLY — NO HISTORICAL L2 DEPTH"
+              : "REPLAY VERIFIED"
+            : "SIMULATED TRADING — SYNTHETIC MARKET DATA"}
+        </span>{" "}
         <span className="dim">
           {flow.isRealData
-            ? `Replaying genuine ${flow.profile.identity.label} microstructure from ${flow.profile.identity.venue}. Simulated fills against real book order flow.`
+            ? flow.isTradeOnly
+              ? `Replaying genuine historical aggTrades from ${flow.profile.identity.venue} (${flow.capturedAt ?? "2024-05-01"}). Historical order-book depth is not included in this trade-only capture, so the DOM is unavailable. (Saved capture replay — no active live connection).`
+              : `Replaying genuine ${flow.profile.identity.label} microstructure from ${flow.profile.identity.venue} (${flow.schemaDetails}${flow.capturedAt ? ` · captured ${flow.capturedAt}` : ""}). Simulated fills against real book order flow. (Saved capture replay — no active live connection).`
             : `Every event is generated for practice. Simulated liquidity and fills for ${flow.profile.identity.label} (${flow.profile.identity.venue}) — ready for real historical market feeds without changing the training engine.`}
         </span>
       </div>
@@ -238,6 +250,7 @@ export function FlowPage({ state }: { state: AppState }) {
             <div className="field">
               <label>Market</label>
               <select
+                id="flow-market-select"
                 value={flow.profile.id}
                 onChange={(e) => {
                   setPlaying(false);
@@ -253,20 +266,36 @@ export function FlowPage({ state }: { state: AppState }) {
             </div>
             <div className="field">
               <label>Scenario</label>
-              <select value={pattern} onChange={(e) => setPattern(e.target.value as FlowScenarioId | "any")}>
-                {PATTERN_OPTIONS.map((o) => (
-                  <option key={o.id} value={o.id}>{o.label}</option>
-                ))}
+              <select
+                id="flow-scenario-select"
+                value={flow.isRealData ? "" : pattern}
+                disabled={flow.isRealData}
+                title={flow.isRealData ? "Scenarios are synthetic practice drills only; not applicable to genuine captures." : undefined}
+                onChange={(e) => setPattern(e.target.value as FlowScenarioId | "any")}
+              >
+                {flow.isRealData && <option value="">N/A (Genuine Replay)</option>}
+                {!flow.isRealData &&
+                  PATTERN_OPTIONS.map((o) => (
+                    <option key={o.id} value={o.id}>{o.label}</option>
+                  ))}
               </select>
             </div>
             <div className="field">
               <label>Data source</label>
-              <div className="flow-header-readonly">
-                <span className="mono">{flow.source}</span>
-                <span className={`badge ${flow.isRealData ? "warn" : "demo"}`}>
-                  {flow.isRealData ? "REAL" : "SYNTHETIC"}
-                </span>
-              </div>
+              <select
+                id="flow-data-source-select"
+                value={flow.dataSourceId}
+                onChange={(e) => {
+                  setPlaying(false);
+                  controller.setFlowDataSource(e.target.value as FlowDataSourceId);
+                }}
+              >
+                {FLOW_DATA_SOURCES.map((ds) => (
+                  <option key={ds.id} value={ds.id}>
+                    {ds.label}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="field">
               <label>Difficulty</label>
@@ -302,15 +331,79 @@ export function FlowPage({ state }: { state: AppState }) {
               </div>
             </div>
           </div>
-          <button
-            className="btn primary"
-            style={{ marginTop: 10 }}
-            onClick={() => { setPlaying(false); controller.generateFlowScenario(pattern); }}
-          >
-            GENERATE SCENARIO
-          </button>
+          {flow.isRealData ? (
+            <div className="btn-row" style={{ marginTop: 10 }}>
+              <button
+                className="btn"
+                id="flow-reload-capture-btn"
+                onClick={() => {
+                  setPlaying(false);
+                  controller.setFlowDataSource(flow.dataSourceId);
+                }}
+              >
+                RELOAD CAPTURE
+              </button>
+              <button
+                className="btn primary"
+                id="flow-switch-synthetic-btn"
+                onClick={() => {
+                  setPlaying(false);
+                  controller.setFlowDataSource("synthetic");
+                }}
+              >
+                SWITCH TO SYNTHETIC
+              </button>
+            </div>
+          ) : (
+            <button
+              className="btn primary"
+              id="flow-generate-scenario-btn"
+              style={{ marginTop: 10 }}
+              onClick={() => {
+                setPlaying(false);
+                controller.generateFlowScenario(pattern);
+              }}
+            >
+              GENERATE SCENARIO
+            </button>
+          )}
         </div>
       </div>
+
+      {flow.isRealData && flow.validationReport && (
+        <section className="card" aria-label="Feed integrity diagnostics" id="flow-feed-integrity">
+          <div className="card-head">
+            <h3>Feed integrity</h3>
+            <span className={`badge ${feedIntegrity.status === "no-reported-defects" ? "ok" : ""}`}>
+              {feedIntegrity.label}
+            </span>
+          </div>
+          <div className="card-body">
+            <div className="flow-header-grid">
+              <div><span className="dim">Validation checks</span><div className="mono">{feedIntegrity.recordCount}</div></div>
+              <div><span className="dim">Normalized events</span><div className="mono">{feedIntegrity.normalizedEventCount}</div></div>
+              <div><span className="dim">Rejected records</span><div className="mono">{feedIntegrity.rejectedCount}</div></div>
+              <div><span className="dim">Duplicates</span><div className="mono">{feedIntegrity.duplicateCount}</div></div>
+              <div><span className="dim">Sequence gaps</span><div className="mono">{feedIntegrity.sequenceGapCount}</div></div>
+            </div>
+            <p className="dim" style={{ fontSize: 11, margin: "10px 0 4px" }}>Reported capabilities</p>
+            <p className="mono" style={{ fontSize: 11, margin: 0 }}>
+              {feedIntegrity.capabilityLabels.length ? feedIntegrity.capabilityLabels.join(" · ") : "No capabilities reported"}
+            </p>
+            {feedIntegrity.rejectionReasons.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <p className="dim" style={{ fontSize: 11, margin: "0 0 4px" }}>Rejection reasons</p>
+                {feedIntegrity.rejectionReasons.slice(0, 5).map((item) => (
+                  <p key={item.reason} className="mono" style={{ fontSize: 11, margin: "2px 0" }}>{item.count} × {item.reason}</p>
+                ))}
+              </div>
+            )}
+            <p className="dim" style={{ fontSize: 10, margin: "10px 0 0" }}>
+              Adapter-reported validation for this recorded capture. This panel is not a live-feed health monitor or an exchange certification.
+            </p>
+          </div>
+        </section>
+      )}
 
       {/* ================== 8.5 MARKET WORKSPACE (sticky) ================== */}
       <section className={flowWorkspaceClass(workspaceMode)} aria-label="Market workspace">
@@ -359,11 +452,19 @@ export function FlowPage({ state }: { state: AppState }) {
             showTradeMarkers={showTradeMarkers}
             coarseContext={flow.policy.coarseContext}
             marketProfile={flow.profile}
+            dataSourceId={flow.dataSourceId}
+            isRealData={flow.isRealData}
+            isTradeOnly={flow.isTradeOnly}
+            lastPrice={of?.lastPrice}
+            currentTimestamp={flow.eventIndex > 0 ? (flow.timestamp ?? undefined) : undefined}
           />
         </div>
         <p className="dim" style={{ fontSize: 10, margin: "8px 0 0", lineHeight: 1.5 }}>
-          Candles are time-bucketed OHLC aggregates of the revealed synthetic tape. Markers map by
-          timestamp/sequence — never by array index — so a decimated price series stays aligned.
+          {flow.isRealData
+            ? flow.isTradeOnly
+              ? "Historical aggTrades replay: candles are aggregated from genuine execution prints. Historical L2 depth is not included in this trade-only capture; the DOM is unavailable."
+              : `Genuine microstructure replay: candles are aggregated from revealed trade prints (${flow.profile.identity.label} on ${flow.profile.identity.venue}). Level 2 depth feeds the order book independently.`
+            : "Candles are time-bucketed OHLC aggregates of the revealed synthetic tape. Markers map by timestamp/sequence — never by array index — so a decimated price series stays aligned."}
           {flow.policy.tradeMarkers
             ? " Entry/exit markers are review-only overlays."
             : " Pattern interpretation annotations stay hidden while blind."}
@@ -428,8 +529,12 @@ export function FlowPage({ state }: { state: AppState }) {
         <section className="panel flow-ws-dom">
           <div className="panel-head">
             <span className="panel-title">DOM / Level 2</span>
-            <span className="right badge">
-              {dom?.hasBook ? `SPR ${fmtPrice(dom.spread ?? 0, flow.profile.pricing.pricePrecision)}` : "NO BOOK"}
+            <span className={`right badge ${dom?.hasBook && (dom.spread ?? 0) < 0 ? "danger" : ""}`}>
+              {dom?.hasBook
+                ? (dom.spread ?? 0) < 0
+                  ? `CROSSED: SPR ${fmtPrice(dom.spread ?? 0, flow.profile.pricing.pricePrecision)}`
+                  : `SPR ${fmtPrice(dom.spread ?? 0, flow.profile.pricing.pricePrecision)}`
+                : "NO BOOK"}
             </span>
           </div>
           <div className="panel-body">
@@ -474,7 +579,7 @@ export function FlowPage({ state }: { state: AppState }) {
                 </div>
               </>
             ) : (
-              <p className="dim" style={{ fontSize: 11, margin: 0 }}>No book snapshot revealed yet.</p>
+              <p className="dim" style={{ fontSize: 11, margin: 0 }}>{flow.isTradeOnly ? "Historical L2 depth is not available in this trade-only capture." : "No book snapshot revealed yet."}</p>
             )}
           </div>
           <p className="dim" style={{ fontSize: 10, margin: "8px 0 0", lineHeight: 1.5 }}>

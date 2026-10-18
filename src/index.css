@@ -1930,6 +1930,51 @@ textarea {
   box-shadow: 0 12px 26px -20px rgba(0, 0, 0, 0.95);
 }
 
+.flow-chart-intervals {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 5px;
+  border: 1px solid #202832;
+  border-radius: 5px;
+  background: rgba(10, 13, 16, 0.94);
+  font-family: 'IBM Plex Mono', monospace;
+}
+.flow-chart-interval-label {
+  padding: 0 4px;
+  color: #667482;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.flow-chart-interval {
+  min-width: 32px;
+  padding: 5px 7px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: #8794a1;
+  font: 10px 'IBM Plex Mono', monospace;
+  cursor: pointer;
+}
+.flow-chart-interval:hover {
+  color: #e7edf3;
+  background: #171e26;
+}
+.flow-chart-interval.is-active {
+  border-color: rgba(34, 211, 238, 0.45);
+  background: rgba(34, 211, 238, 0.12);
+  color: #67e8f9;
+}
+.flow-chart-interval:focus-visible {
+  outline: 2px solid #67e8f9;
+  outline-offset: 1px;
+}
+
 .flow-workspace-chart {
   margin-bottom: 0;
   min-height: 0;

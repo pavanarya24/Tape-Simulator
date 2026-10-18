@@ -284,5 +284,34 @@ describe("Phase 9-Crypto Genuine Binance Public Market Data Certification", () =
       expect(seekSnap.dom).toEqual(seqSnap.dom);
     }
   });
+
+  it("rejects USDⓈ-M depth frames that omit pu instead of falling back to Spot continuity", () => {
+    const adapter = new BinanceAdapter();
+    const { events, report } = adapter.normalize([
+      snapshot(500, "ETHUSDT"),
+      // U/u overlap would pass the Spot rule, but Futures requires pu continuity.
+      { e: "depthUpdate", E: 2010, T: 2009, s: "ETHUSDT", U: 501, u: 501, b: [["3000", "2"]], a: [] },
+      // The book must remain unanchored until another snapshot arrives.
+      { e: "depthUpdate", E: 2020, T: 2019, s: "ETHUSDT", U: 502, u: 502, pu: 501, b: [["3000", "3"]], a: [] },
+    ], { market: "usdm", symbol: "ETHUSDT" });
+
+    expect(report.sequenceGapCount).toBe(1);
+    expect(events.filter((event) => event.kind === "book-reset")).toHaveLength(2);
+    expect(events.some((event) => event.kind === "depth-delta" && event.price === 3000 && event.size === 2)).toBe(false);
+    expect(events.some((event) => event.kind === "depth-delta" && event.price === 3000 && event.size === 3)).toBe(false);
+  });
+
+  it("ignores stale duplicate Spot depth updates without counting a sequence gap", () => {
+    const adapter = new BinanceAdapter();
+    const { events, report } = adapter.normalize([
+      snapshot(100),
+      { e: "depthUpdate", E: 1010, s: "BTCUSDT", U: 99, u: 100, b: [["60000", "9"]], a: [] },
+      { e: "depthUpdate", E: 1020, s: "BTCUSDT", U: 101, u: 101, b: [["60000", "4"]], a: [] },
+    ], { market: "spot", symbol: "BTCUSDT" });
+
+    expect(report.sequenceGapCount).toBe(0);
+    expect(events.some((event) => event.kind === "depth-delta" && event.price === 60000 && event.size === 9)).toBe(false);
+    expect(events.some((event) => event.kind === "depth-delta" && event.price === 60000 && event.size === 4)).toBe(true);
+  });
 });
 
