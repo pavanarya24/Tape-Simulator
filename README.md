@@ -76,9 +76,9 @@ bun install
 bun run dev
 ```
 
-Open the URL it prints (`http://localhost:5173`). A clearly-labelled **synthetic demo
-dataset** is seeded automatically, so the terminal works the moment it loads — you do not
-need to own any market data to try it.
+Opening `http://localhost:5173` gives you the landing page; the terminal itself is at
+`/app.html`. A clearly-labelled **synthetic demo dataset** is seeded automatically, so the
+terminal works the moment it loads — you do not need to own any market data to try it.
 
 <details>
 <summary>All commands</summary>
@@ -185,8 +185,9 @@ notice can be relaxed but never retroactively tightened.
 
 ## Deployment
 
-Vercel (or any static host) builds with `bun run build`; output directory `dist`.
-`academy.html` is copied to the site root by Vite's `public/` directory.
+Vercel (or any static host) builds with `bun run build`; output directory `dist`. The
+landing page is the root entry `index.html`; the app is `app.html`. `academy.html`,
+`legal.html` and `shots/` are copied to the site root by Vite's `public/` directory.
 
 ---
 

@@ -23,5 +23,9 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: false,
+    rollupOptions: {
+      // Two HTML entries: the landing page served at "/", and the app at "/app.html".
+      input: { main: "index.html", app: "app.html" },
+    },
   },
 });

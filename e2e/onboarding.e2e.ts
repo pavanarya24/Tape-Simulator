@@ -9,7 +9,7 @@ import { focusApp, openApp, watchErrors } from "./helpers";
  */
 
 test("a first-time visitor is told what this is, and can dismiss it for good", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/app.html");
 
   const note = page.locator(".first-run");
   await expect(note).toBeVisible();

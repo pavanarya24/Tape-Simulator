@@ -3,5 +3,8 @@
   "framework": "vite",
   "buildCommand": "bun run build",
   "outputDirectory": "dist",
-  "installCommand": "bun install"
+  "installCommand": "bun install",
+  "redirects": [
+    { "source": "/welcome.html", "destination": "/", "permanent": false }
+  ]
 }

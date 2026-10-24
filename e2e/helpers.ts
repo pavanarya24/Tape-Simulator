@@ -25,7 +25,7 @@ export async function openApp(page: Page): Promise<void> {
       // Storage unavailable; the note will show and may intercept a click.
     }
   });
-  await page.goto("/");
+  await page.goto("/app.html");
   await expect(page.locator(".navbtn").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "MARKET BUY", exact: true })).toBeVisible();
 }
