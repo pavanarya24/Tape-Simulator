@@ -5,7 +5,7 @@ import { CONTRACTS } from "../market/instruments";
 import { money, signedMoney, pnlClass, price as fmtPrice, num } from "../util/format";
 
 export function RightColumn({ state }: { state: AppState }) {
-  const { engine, position, settings, session } = state;
+  const { engine, position, settings, session, settled } = state;
   const spec = CONTRACTS[settings.contract];
 
   const cursor = engine?.cursor ?? 0;
@@ -79,32 +79,41 @@ export function RightColumn({ state }: { state: AppState }) {
           </div>
 
           <div className="grid2" style={{ marginBottom: 6 }}>
-            <button className="btn buy wide" onClick={() => submit("buy", "market")} disabled={!engine}>
+            <button className="btn buy wide" onClick={() => submit("buy", "market")} disabled={!engine || settled}>
               MARKET BUY
             </button>
-            <button className="btn sell wide" onClick={() => submit("sell", "market")} disabled={!engine}>
+            <button className="btn sell wide" onClick={() => submit("sell", "market")} disabled={!engine || settled}>
               MARKET SELL
             </button>
           </div>
           <div className="grid2" style={{ marginBottom: 6 }}>
-            <button className="btn buy wide" onClick={() => submit("buy", "limit")} disabled={!engine}>
+            <button className="btn buy wide" onClick={() => submit("buy", "limit")} disabled={!engine || settled}>
               LIMIT BUY
             </button>
-            <button className="btn sell wide" onClick={() => submit("sell", "limit")} disabled={!engine}>
+            <button className="btn sell wide" onClick={() => submit("sell", "limit")} disabled={!engine || settled}>
               LIMIT SELL
             </button>
           </div>
           <div className="grid2">
-            <button className="btn buy wide" onClick={() => submit("buy", "stop")} disabled={!engine}>
+            <button className="btn buy wide" onClick={() => submit("buy", "stop")} disabled={!engine || settled}>
               STOP BUY
             </button>
-            <button className="btn sell wide" onClick={() => submit("sell", "stop")} disabled={!engine}>
+            <button className="btn sell wide" onClick={() => submit("sell", "stop")} disabled={!engine || settled}>
               STOP SELL
             </button>
           </div>
           <p className="dim" style={{ fontSize: 10.5, margin: "9px 0 0" }}>
-            Market orders fill at the <strong>next revealed candle's open</strong> plus slippage.
-            Orders only ever act on bars the replay has already revealed.
+            {settled ? (
+              <>
+                Replay finished at the final bar, so the session has settled — orders are closed.
+                Reset the replay or pick another session to keep trading.
+              </>
+            ) : (
+              <>
+                Market orders fill at the <strong>next revealed candle's open</strong> plus slippage.
+                Orders only ever act on bars the replay has already revealed.
+              </>
+            )}
           </p>
         </div>
       </section>

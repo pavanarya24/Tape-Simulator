@@ -287,6 +287,8 @@ export interface AppState {
   sessions: SessionMeta[];
   session: SessionMeta | null;
   engine: ReplaySnapshot | null;
+  /** The replay has reached its final bar, so orders are closed for the session. */
+  settled: boolean;
   position: PositionSnapshot;
   orders: Order[];
   fills: Fill[];
@@ -474,6 +476,7 @@ export class TapeLabController {
       sessions: this.sessions,
       session: this.session?.meta ?? null,
       engine: this.engine ? this.engine.state : null,
+      settled: this.settled,
       position:
         this.sim?.snapshot() ?? {
           direction: "flat",

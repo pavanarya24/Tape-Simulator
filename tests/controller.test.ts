@@ -244,6 +244,63 @@ describe("simulated trading synchronizes every panel", () => {
   });
 });
 
+/**
+ * Regression: the order ticket must be able to see that the replay has settled.
+ *
+ * The settled guard above silently swallows orders, but AppState carried no
+ * settled flag, so the ticket kept MARKET BUY enabled at the final bar. A click
+ * produced no order, no message and no state change — the terminal just looked
+ * broken. The ticket now disables and explains itself instead.
+ */
+describe("the order ticket can see that the session has settled", () => {
+  test("settled tracks the end-of-replay boundary in both directions", async () => {
+    controller.resetReplay();
+    await settle();
+    expect(state().settled).toBe(false);
+
+    controller.seek(controller.session!.bars.length - 1);
+    await settle();
+    expect(state().settled).toBe(true);
+
+    controller.seek(controller.session!.bars.length - 2);
+    await settle();
+    expect(state().settled).toBe(false);
+  });
+
+  test("the flag stays in step with the guard that swallows orders", async () => {
+    controller.resetReplay();
+    await settle();
+    controller.seek(controller.session!.bars.length - 1);
+    await settle();
+    const before = state().orders.length;
+    controller.placeOrder({ side: "buy", type: "market", qty: 1 });
+    await settle();
+    // The order really was dropped — so the ticket must not look live.
+    expect(state().orders.length).toBe(before);
+    expect(state().settled).toBe(true);
+  });
+
+  test("reset clears the flag", async () => {
+    controller.seek(controller.session!.bars.length - 1);
+    await settle();
+    expect(state().settled).toBe(true);
+    controller.resetReplay();
+    await settle();
+    expect(state().settled).toBe(false);
+  });
+
+  test("a session change clears the flag", async () => {
+    controller.seek(controller.session!.bars.length - 1);
+    await settle();
+    expect(state().settled).toBe(true);
+    if (controller.sessions.length > 1) {
+      controller.selectSession(controller.sessions[1].id);
+      await settle();
+      expect(state().settled).toBe(false);
+    }
+  });
+});
+
 describe("determinism through the full application stack", () => {
   async function scriptedRun(): Promise<string[]> {
     controller.resetReplay();
