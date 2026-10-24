@@ -21,6 +21,12 @@ build/
 node_modules/
 *.tsbuildinfo
 
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
 # Large dataset caches (not committed to git)
 tests/fixtures/*.zip
 tests/fixtures/extracted/
