@@ -45,6 +45,14 @@ export function DataPage({ state }: { state: AppState }) {
         Level-2 depth. Nothing in Tape Lab will claim otherwise.
       </div>
 
+      <div className="callout warn">
+        <strong>Where the bars come from.</strong> The NQ and ES sessions bundled with Tape Lab are
+        a seeded random walk generated in your browser — not recorded market history, and not
+        licensed from any data vendor. They are labelled demo data throughout the app. A CSV you
+        import yourself stays subject to the terms of whoever supplied it. Flow Lab is a different
+        case: its replays are genuine recorded venue data, described on that page.
+      </div>
+
       {state.ingest && (
         <div className="card">
           <div className="card-head">

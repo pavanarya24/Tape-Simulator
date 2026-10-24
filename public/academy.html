@@ -76,15 +76,14 @@ nav{max-width:1180px;margin:0 auto;padding:0 12px;display:flex;gap:2px;overflow-
 nav::-webkit-scrollbar{display:none}
 .nav-btn{
   background:none;border:0;border-bottom:2px solid transparent;color:var(--text-dim);
-  font-family:var(--mono);font-size:.78rem;padding:9px 13px 8px;cursor:pointer;white-space:nowrap;
+  font-family:var(--mono);font-size:.78rem;padding:9px 13px 8px;cursor:pointer;white-space:nowrap;text-decoration:none;
 }
 .nav-btn:hover{color:var(--text)}
 .nav-btn.active{color:var(--phosphor);border-bottom-color:var(--phosphor)}
 .nav-btn:focus-visible,button:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--phosphor);outline-offset:2px}
 
 main{max-width:1180px;margin:0 auto;padding:26px 20px 90px}
-.tab-content{display:none}
-.tab-content.active{display:block}
+.tab-content{display:block;scroll-margin-top:74px}
 .lede{color:var(--text-dim);max-width:66ch;margin-bottom:26px}
 
 /* ---------- hero ---------- */
@@ -98,7 +97,7 @@ main{max-width:1180px;margin:0 auto;padding:26px 20px 90px}
 }
 .hero-tape span{display:inline-block;padding:0 18px;color:var(--text-dim)}
 .hero-tape .up{color:var(--bid)}.hero-tape .dn{color:var(--ask)}
-.hero-body{padding:26px 24px 24px;display:grid;grid-template-columns:1.15fr .85fr;gap:28px}
+.hero-body{padding:26px 24px 24px;display:grid;grid-template-columns:1fr;gap:28px}
 .hero h1{font-family:var(--mono);font-size:1.9rem;font-weight:700;margin:0 0 10px;letter-spacing:-.03em}
 .hero h1 em{font-style:normal;color:var(--phosphor)}
 .hero p{color:var(--text-dim);font-size:1rem}
@@ -380,24 +379,10 @@ textarea{
 <header>
   <div class="masthead">
     <div class="logo">TAPE READING <b>ACADEMY</b></div>
-    <div class="status">
-      <span><span class="pulse"></span>simulated feed</span>
-      <span id="clockOut">--:--:--</span>
-    </div>
   </div>
   <nav>
-    <button class="nav-btn active" data-tab="home">Home</button>
-    <button class="nav-btn" data-tab="lessons">Lessons</button>
-    <button class="nav-btn" data-tab="charts">Charts</button>
-    <button class="nav-btn" data-tab="walkthrough">Walkthrough</button>
-    <button class="nav-btn" data-tab="drill">Drill</button>
-    <button class="nav-btn" data-tab="desk">Trading desk</button>
-    <button class="nav-btn" data-tab="tape">Tape sim</button>
-    <button class="nav-btn" data-tab="data">Your data</button>
-    <button class="nav-btn" data-tab="report">Report card</button>
-    <button class="nav-btn" data-tab="leaderboard">Leaderboard</button>
-    <button class="nav-btn" data-tab="quiz">Quiz</button>
-    <button class="nav-btn" data-tab="library">Library</button>
+    <a class="nav-btn" href="#lessons">Lessons</a>
+    <a class="nav-btn" href="#library">Library</a>
   </nav>
 </header>
 
@@ -405,41 +390,30 @@ textarea{
 <!-- ============================ HOME ============================ -->
 <div id="home" class="tab-content active">
   <div class="hero">
-    <div class="hero-tape" id="heroTape"></div>
     <div class="hero-body">
       <div>
         <h1>Learn to read <em>order flow</em>, then prove you can trade it.</h1>
-        <p>Thirteen lessons take you from bid/ask mechanics to auction theory and microstructure.
-        Then the drills stop explaining and start testing: identify patterns against a clock, or
-        step onto the trading desk, where the chart stops at the decision point and you have to
-        commit before you know the answer.</p>
-        <p class="hint">Everything runs in this page. No account, no feed, no data leaves your browser.</p>
-      </div>
-      <div class="hero-stats">
-        <div class="hero-stat"><span class="n" id="homeLessons">0/18</span><span class="l">lessons read</span></div>
-        <div class="hero-stat"><span class="n" id="homeBest">0</span><span class="l">best drill streak</span></div>
-        <div class="hero-stat"><span class="n">∞</span><span class="l">generated charts</span></div>
-        <div class="hero-stat"><span class="n" id="homeBadges">0/8</span><span class="l">badges earned</span></div>
+        <p>Eighteen lessons take you from bid/ask mechanics to auction theory and microstructure.
+        The reading is here, in order, in one place. The proving — generated charts, timed drills,
+        bar-by-bar replay, a trade log that scores itself — lives in the app.</p>
+        <p class="hint">Static text and diagrams. No account, no feed, nothing to install.</p>
       </div>
     </div>
   </div>
 
-  <div class="rank-card" style="margin-bottom:26px">
-    <div class="rank-top">
-      <div><span class="rank-name" id="rankName">Observer</span> <span class="rank-xp">· <b id="rankXp">0</b> XP</span></div>
-      <span class="rank-xp" id="rankNextTxt">—</span>
-    </div>
-    <div class="xp-bar"><i id="rankBar"></i></div>
-    <p class="hint" style="margin:0">Rank is computed from lessons completed, drill streak, quiz
-    accuracy, and total R banked on the trading desk. Full breakdown and badges are on the
-    <button class="btn" id="jumpReport" style="padding:2px 9px;font-size:.68rem;vertical-align:1px">Report card</button>.</p>
+  <div class="panel" id="what-this-is" style="border-color:var(--phosphor)">
+    <h3 style="margin-top:0">What this is</h3>
+    <p>A written course in reading order flow and tape. The text and diagrams are static teaching
+    material — there is no live data on this page, nothing here predicts a market, and nothing here
+    is trading advice. The interactive charts, drills, simulators and score tracking that used to
+    live on this page are now part of the <a href="/">Tape Lab app</a>. Practice there, read here.</p>
   </div>
 
   <div class="panel">
     <h3 style="margin-top:0">The course, as one system</h3>
     <p class="hint" style="max-width:66ch;margin-bottom:14px">Six parts, the way six systems make up a
-    body — no single one explains a trader, but skip one and the rest stop making sense. Click a
-    system to jump straight to its lessons.</p>
+    body — no single one explains a trader, but skip one and the rest stop making sense. The lesson
+    list below runs in the same order.</p>
     <div class="svg-wrap" style="cursor:default">
       <svg viewBox="0 0 700 400" width="100%" height="400" id="courseMapSvg">
         <rect width="700" height="400" fill="#0A0F16"/>
@@ -448,91 +422,82 @@ textarea{
         <text x="350" y="210" text-anchor="middle" fill="#F0A93B" font-family="monospace" font-size="10" font-weight="bold">MARKET</text>
 
         <line x1="350" y1="150" x2="350" y2="70" stroke="#3FB950"/>
-        <g class="map-node" data-tab="lessons" data-jump="0" style="cursor:pointer">
+        <g class="map-node">
           <rect x="230" y="20" width="240" height="50" fill="#141b24" stroke="#3FB950"/>
           <text x="350" y="40" text-anchor="middle" fill="#3FB950" font-family="monospace" font-size="10" font-weight="bold">FOUNDATIONS · 01–05</text>
           <text x="350" y="56" text-anchor="middle" fill="#D7DEE7" font-family="monospace" font-size="8">bid/ask, tape colour, absorption</text>
         </g>
 
         <line x1="300" y1="163" x2="165" y2="105" stroke="#58A6FF"/>
-        <g class="map-node" data-tab="lessons" data-jump="5" style="cursor:pointer">
+        <g class="map-node">
           <rect x="20" y="70" width="240" height="50" fill="#141b24" stroke="#58A6FF"/>
           <text x="140" y="90" text-anchor="middle" fill="#58A6FF" font-family="monospace" font-size="10" font-weight="bold">READING PARTICIPATION · 06–08</text>
           <text x="140" y="106" text-anchor="middle" fill="#D7DEE7" font-family="monospace" font-size="8">spoofing, context, risk rules</text>
         </g>
 
         <line x1="300" y1="237" x2="165" y2="308" stroke="#A98BFF"/>
-        <g class="map-node" data-tab="lessons" data-jump="8" style="cursor:pointer">
+        <g class="map-node">
           <rect x="20" y="280" width="240" height="50" fill="#141b24" stroke="#A98BFF"/>
           <text x="140" y="300" text-anchor="middle" fill="#A98BFF" font-family="monospace" font-size="10" font-weight="bold">CONTEXT & STRUCTURE · 09–11</text>
           <text x="140" y="316" text-anchor="middle" fill="#D7DEE7" font-family="monospace" font-size="8">auction theory, Wyckoff, dealers</text>
         </g>
 
         <line x1="400" y1="237" x2="535" y2="308" stroke="#E5534B"/>
-        <g class="map-node" data-tab="lessons" data-jump="11" style="cursor:pointer">
+        <g class="map-node">
           <rect x="440" y="280" width="240" height="50" fill="#141b24" stroke="#E5534B"/>
           <text x="560" y="300" text-anchor="middle" fill="#E5534B" font-family="monospace" font-size="10" font-weight="bold">APPLICATION · 12–13</text>
           <text x="560" y="316" text-anchor="middle" fill="#D7DEE7" font-family="monospace" font-size="8">process discipline, one vocabulary</text>
         </g>
 
         <line x1="400" y1="163" x2="535" y2="105" stroke="#F0A93B"/>
-        <g class="map-node" data-tab="lessons" data-jump="13" style="cursor:pointer">
+        <g class="map-node">
           <rect x="440" y="70" width="240" height="50" fill="#141b24" stroke="#F0A93B"/>
           <text x="560" y="90" text-anchor="middle" fill="#F0A93B" font-family="monospace" font-size="10" font-weight="bold">QUANT LAB · 14–16</text>
           <text x="560" y="106" text-anchor="middle" fill="#D7DEE7" font-family="monospace" font-size="8">OFI, confidence intervals, Kelly</text>
         </g>
 
         <line x1="350" y1="330" x2="350" y2="345" stroke="#3FB950" opacity="0"/>
-        <g class="map-node" data-tab="lessons" data-jump="16" style="cursor:pointer">
+        <g class="map-node">
           <rect x="230" y="345" width="240" height="45" fill="#141b24" stroke="#3FB950"/>
           <line x1="350" y1="256" x2="350" y2="345" stroke="#3FB950" stroke-dasharray="4,3"/>
           <text x="350" y="364" text-anchor="middle" fill="#3FB950" font-family="monospace" font-size="10" font-weight="bold">ORDER FLOW INSTRUMENTS · 17–18</text>
           <text x="350" y="380" text-anchor="middle" fill="#D7DEE7" font-family="monospace" font-size="8">footprint, CVD, where it applies</text>
         </g>
       </svg>
-      <div class="caption">Every box is clickable — jumps straight to that unit's first lesson</div>
+      <div class="caption">The six blocks, in the order the lessons run</div>
     </div>
   </div>
 
   <h2>Where to start</h2>
   <p class="lede">Reading about absorption takes twenty minutes. Recognising it in real time, under a
-  clock, with money on it, takes months. The tabs are ordered by how much they ask of you.</p>
+  clock, with money on it, takes months. Read this page in order, then go and do the reps.</p>
 
   <div class="panel">
-    <h3>Lessons → Charts → Drill → Trading desk</h3>
+    <h3>Read here, practise there</h3>
     <ol>
-      <li><strong>Lessons</strong> — the concepts, in order. Foundation modules first, then the
-      advanced frameworks (auction theory, Wyckoff, microstructure, prop-desk process).</li>
-      <li><strong>Charts</strong> — a candlestick engine generates a fresh chart containing one
-      pattern. You read it, then reveal the answer. Volume profile and a rotatable 3D profile
-      included so you can see where value actually built.</li>
-      <li><strong>Drill</strong> — same charts, but timed, scored, and the difficulty climbs with
-      your streak. There is also a daily drill: the same five charts for everyone, every day.</li>
-      <li><strong>Trading desk</strong> — the chart stops mid-pattern. Long, short, or stand aside,
-      with a fixed $25 risk and a 2R target. The bars then resolve and your account is marked.
-      Three losing R in a day locks you out, exactly like Lesson 8 says it should.</li>
-      <li><strong>Trading desk, second half</strong> — the decision point now comes with a Level 2
-      ladder and the last ten prints, because candles alone are half the information. Roughly a fifth
-      of the time the flow says nothing useful, which is also true on a real screen.</li>
-      <li><strong>Report card</strong> — every desk trade is kept on this device across sessions and
-      sorted into four boxes: trades you would take again that paid, ones that cost, and the two
-      boxes that matter more — mistakes that got rewarded, and mistakes that did not.</li>
-      <li><strong>Your data</strong> — paste real OHLCV from a free source and drill on genuine
-      history instead of generated charts.</li>
+      <li><strong>Lessons, in order</strong> — the concepts, foundation modules first, then the
+      advanced frameworks (auction theory, Wyckoff, microstructure, prop-desk process). Each one
+      opens in place, so you can work straight down the page.</li>
+      <li><strong>Then the app</strong> — <a href="/">Tape Lab</a> is where the interactive half
+      lives: historical NQ and ES sessions replayed bar by bar, order flow and volume profile
+      charts, blind drills and scenarios, a trade log, and score tracking.</li>
+      <li><strong>Then your own record</strong> — Lesson 12's process discipline and Lesson 15's
+      sample-size math only mean something against trades you actually logged, and Lesson 16 says
+      plainly not to size up before that sample exists.</li>
     </ol>
   </div>
 
   <div class="callout">
-    Beyond this page: study a lesson → run the matching tape scenario → replay real history bar by
-    bar → paper trade → only then risk small live size.
+    The path, in order: study a lesson → drill it until the read is fast → replay real history bar
+    by bar → paper trade → only then risk small live size.
   </div>
   <div class="callout good">
     Account context used throughout: $25,000, roughly 4x intraday buying power, direct-access broker
     with Level 2 and hotkeys, no PDT restriction, US equities.
   </div>
   <div class="callout warn">
-    This is educational material, not advice. Generated charts are synthetic. Nothing here predicts
-    a real market, and most people who day trade lose money.
+    This is educational material, not advice. Nothing here predicts a real market, and most people
+    who day trade lose money.
   </div>
 </div>
 
@@ -541,15 +506,8 @@ textarea{
   <h2>Lessons</h2>
   <p class="lede">Eighteen lessons in six blocks, the last five at genuine quant depth. Work
   through them in order — the later material assumes you can already recognise absorption and
-  imbalance on sight, the Quant Lab assumes the Trading desk has given you real trades to run its
-  formulas on, and Order Flow Instruments assumes you've watched the CVD panel on the Charts tab.</p>
-
-  <div class="lessons-progress">
-    <span>your progress <b id="lessonsCount">0</b> / 18</span>
-    <div class="bar"><i id="lessonsBar"></i></div>
-    <button class="btn" id="lessonsReset" style="padding:4px 10px">Reset</button>
-    <span class="hint">tracked in this browser only, using the button at the bottom of each lesson</span>
-  </div>
+  imbalance on sight, the Quant Lab assumes you have real trades of your own to run its formulas
+  on, and Order Flow Instruments assumes you have watched cumulative delta move against price.</p>
 
   <div class="unit"><span class="range">01–05</span><div><h3>Foundations</h3>
     <p>The vocabulary everything after this depends on: how a quote works, who is aggressive, and how to measure it.</p></div></div>
@@ -807,7 +765,7 @@ textarea{
       power and no PDT restriction:</p>
       <ul>
         <li>Risk $25 to $50 per trade. No exceptions, regardless of how good it looks.</li>
-        <li>Stop for the day at three losing R. The trading desk in this site enforces this.</li>
+        <li>Stop for the day at three losing R. The trading desk in Tape Lab enforces this.</li>
         <li>Around four trades a day. Scalping rewards selection, not activity.</li>
         <li>Progression: replay historical data bar by bar, then simulator, then 100 shares live,
         then size up only once your process scores are consistent.</li>
@@ -893,7 +851,7 @@ textarea{
           <text x="308" y="112" fill="#58A6FF" font-family="monospace" font-size="10">value area, ~70%</text>
           <line x1="258" y1="113" x2="295" y2="113" stroke="#F0A93B" stroke-width="1.5" stroke-dasharray="3,2"/>
           <text x="308" y="128" fill="#F0A93B" font-family="monospace" font-size="10">point of control</text>
-          <text x="20" y="235" fill="#7E8C9C" font-family="monospace" font-size="9">volume by price — the Charts tab builds this live, in 2D and 3D</text>
+          <text x="20" y="235" fill="#7E8C9C" font-family="monospace" font-size="9">volume by price — where value actually built</text>
         </svg>
       </div>
 
@@ -1011,8 +969,8 @@ textarea{
       </table>
       </div>
       <div class="callout">
-        The Drill and Trading desk tabs generate springs and upthrusts among the other patterns.
-        Failing to tell them apart under a clock is the whole reason those tabs exist.
+        Tape Lab's drills generate springs and upthrusts among the other patterns.
+        Failing to tell them apart under a clock is the whole reason they exist.
       </div>
 
       <p class="step-eyebrow">01 — Be precise about what a sweep actually confirms</p>
@@ -1037,7 +995,7 @@ textarea{
         <ul>
           <li>A spring or upthrust is a failed break, confirmed only after the fact by a fast reversal on climactic volume.</li>
           <li>It tells you who is trapped, not how far the move back will go.</li>
-          <li>Scenario E in the Tape simulator plays the same level being swept in both directions in one session — the sweep is the setup, never the signal to join it.</li>
+          <li>One Tape Lab scenario plays the same level being swept in both directions in one session — the sweep is the setup, never the signal to join it.</li>
         </ul>
       </div>
     </div>
@@ -1200,7 +1158,7 @@ textarea{
       </div>
 
       <div class="callout good">
-        The trading desk in this site logs exactly these fields. A ten-out-of-ten setup gets the same
+        The trading desk in Tape Lab logs exactly these fields. A ten-out-of-ten setup gets the same
         $25 as everything else, because conviction is not a sizing method.
       </div>
       <p>Traders fail in a small number of repeated ways: trading an opinion instead of the tape,
@@ -1303,8 +1261,8 @@ textarea{
 
   <div class="unit"><span class="range">14–16</span><div><h3>Quant Lab</h3>
     <p>The math underneath everything so far. This is where "read the tape" turns into numbers you
-    can defend: price impact, the statistics of your own edge, and how much to actually risk. Your
-    Report Card runs these formulas on your real trades.</p></div></div>
+    can defend: price impact, the statistics of your own edge, and how much to actually risk. Tape Lab's
+    score page runs these formulas on your real trades.</p></div></div>
 
   <details class="lesson">
     <summary><span class="num">14</span> Order flow imbalance and the price impact model <span class="difficulty">Advanced · 10 min</span> <span class="badge badge-adv">Quant</span></summary>
@@ -1448,9 +1406,9 @@ textarea{
       <div class="mistake">
         <span class="tag">Common mistake</span>
         <p>Doubling size after ten winning trades. Ten trades is not evidence of anything — it is
-        within the range a strategy with zero true edge produces by chance alarmingly often. The
-        Report Card computes your actual confidence interval from your logged desk trades so you are
-        not guessing.</p>
+        within the range a strategy with zero true edge produces by chance alarmingly often. Tape Lab's
+        score page computes your actual confidence interval from your logged trades so you are not
+        guessing.</p>
       </div>
       <div class="takeaways">
         <h5>Key takeaways</h5>
@@ -1528,7 +1486,7 @@ textarea{
       <p class="step-eyebrow">01 — Reconciling this with Lesson 8's flat $25</p>
       <div class="split2">
         <div class="yes"><h5>What Kelly tells you</h5>
-          <p>Once your Report Card shows a statistically credible edge (Lesson 15's confidence
+          <p>Once your own log shows a statistically credible edge (Lesson 15's confidence
           interval clears zero with a reasonable sample), Kelly gives you a principled ceiling for how
           aggressively you could size — and fractional Kelly a principled, survivable version of it.</p></div>
         <div class="no"><h5>What it does not tell you</h5>
@@ -1558,7 +1516,7 @@ textarea{
   <div class="unit"><span class="range">17–18</span><div><h3>Order Flow Instruments</h3>
     <p>Two more layers of vocabulary used on professional order-flow platforms: footprint charts and
     cumulative delta as a plotted, tradeable indicator, and the order types and participants that
-    actually populate the tape. The Charts tab now plots CVD live under every generated chart.</p></div></div>
+    actually populate the tape. Tape Lab plots cumulative delta beneath the charts it generates.</p></div></div>
 
   <details class="lesson">
     <summary><span class="num">17</span> Footprint charts, delta, and the four kinds of divergence <span class="difficulty">Advanced · 11 min</span> <span class="badge badge-adv">Quant</span></summary>
@@ -1607,7 +1565,7 @@ textarea{
       that hit the bid (sellers giving it away). A single bar's delta tells you which side was more
       willing to pay the spread <em>during that bar</em>. <strong>Cumulative Volume Delta (CVD)</strong>
       is the running total of every bar's delta across the session — a scoreboard of aggression that
-      never resets, plotted directly beneath the candles in the Charts tab.</p>
+      never resets, plotted directly beneath the candles.</p>
 
       <div class="svg-wrap">
         <svg viewBox="0 0 460 195" width="100%" height="195">
@@ -1696,10 +1654,9 @@ textarea{
       </div>
 
       <div class="callout good">
-        Every generated chart in the Charts tab now has a genuine, computed CVD line beneath it, engineered
-        to show the correct divergence signature for whichever pattern it contains. Read the CVD panel
-        before you reveal — the chart's own <span class="mono">cvdRead</span> tells you which of these
-        four it was.
+        Tape Lab's generated charts each carry a genuine, computed CVD line beneath them, engineered
+        to show the correct divergence signature for whichever pattern the chart contains. Read that
+        panel before you reveal — it tells you which of these four you are looking at.
       </div>
 
       <p class="step-eyebrow">01 — CVD and the OFI from Lesson 14 are not the same measurement</p>
@@ -1809,7 +1766,7 @@ textarea{
           looks like on your specific instrument, at your specific time of day. This course gets you the
           vocabulary; only repetition gets you the calibration.</p></div>
         <div class="no"><h5>What it does not earn you</h5>
-          <p>Immunity from the ~30% of clean-looking setups that fail anyway (the Drill and Desk have
+          <p>Immunity from the ~30% of clean-looking setups that fail anyway (Tape Lab's drills have
           been showing you this the whole time), or a shortcut around Lesson 15's sample-size math.
           Experience improves your read; it does not change the statistics.</p></div>
       </div>
@@ -1848,429 +1805,6 @@ textarea{
       </div>
     </div>
   </details>
-</div>
-<!-- ============================ CHARTS ============================ -->
-<div id="charts" class="tab-content">
-  <h2>Charts</h2>
-  <p class="lede">Each chart is generated fresh: new price, new volatility, new session length, new
-  noise, one pattern hidden inside. Read it first, reveal second. The profile on the right shows
-  where volume actually built, which is the auction theory from Lesson 9 made literal.</p>
-
-  <div class="controls">
-    <button class="btn primary" id="cGen">Generate chart</button>
-    <select class="btn" id="cPattern">
-      <option value="any">Any pattern</option>
-      <option value="spring">Spring only</option>
-      <option value="upthrust">Upthrust only</option>
-      <option value="absorption">Absorption only</option>
-      <option value="initiative">Initiative break only</option>
-      <option value="fade">Responsive fade only</option>
-    </select>
-    <button class="btn" id="cReveal">Reveal what it was</button>
-    <label class="hint" style="display:flex;gap:6px;align-items:center">
-      <input type="checkbox" id="cProfile" checked> show profile
-    </label>
-    <label class="hint" style="display:flex;gap:6px;align-items:center">
-      <input type="checkbox" id="cCVD" checked> show CVD
-    </label>
-  </div>
-
-  <div class="chart-shell">
-    <canvas id="chartMain" width="1040" height="440"></canvas>
-    <div class="chart-meta">
-      <span>symbol <b id="cSym">—</b></span>
-      <span>range <b id="cRange">—</b></span>
-      <span>bars <b id="cBars">—</b></span>
-      <span>POC <b id="cPoc">—</b></span>
-      <span>value area <b id="cVa">—</b></span>
-    </div>
-  </div>
-
-  <div class="chart-shell" id="cvdShell">
-    <canvas id="chartCVD" width="1040" height="140"></canvas>
-    <div class="chart-meta">
-      <span>cumulative volume delta <b id="cCvdVal">—</b></span>
-      <span id="cCvdRead" class="hint" style="margin-left:auto">Lesson 17 — read this before you reveal</span>
-    </div>
-  </div>
-
-  <div id="cVerdict" class="verdict neutral">Generate a chart, decide what you think it is, then reveal.</div>
-
-  <div class="panel">
-    <h3>Volume profile in three dimensions</h3>
-    <p class="hint" style="max-width:66ch">The same volume-by-price data, extruded and rotatable.
-    Depth is time: the back slab is the first half of the session, the front slab the second. When
-    the front slab has migrated away from the back one, value moved — that is a trend day in one
-    picture.</p>
-    <div class="chart-shell">
-      <canvas id="profile3d" width="1040" height="360"></canvas>
-    </div>
-    <div class="controls">
-      <span class="hint">rotate</span>
-      <input type="range" id="p3rot" min="-45" max="45" value="24" style="flex:1;max-width:320px">
-      <span class="hint">tilt</span>
-      <input type="range" id="p3tilt" min="8" max="45" value="22" style="flex:1;max-width:320px">
-      <button class="btn" id="p3spin">Spin</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============================ WALKTHROUGH ============================ -->
-<div id="walkthrough" class="tab-content">
-  <h2>Walkthrough</h2>
-  <p class="lede">Five patterns, narrated. Each one plays on its own — no clicking required — building
-  the chart bar by bar while the caption explains what you're looking at and why it matters. Watch
-  once cold, then again once you know the ending; the second watch is where the tell actually sinks in.</p>
-
-  <div class="walk-shell">
-    <div class="walk-main">
-      <div class="chart-shell">
-        <canvas id="chartWalk" width="1040" height="420"></canvas>
-        <div class="walk-caption-box">
-          <span class="walk-tag" id="walkTag">—</span>
-          <p class="walk-caption" id="walkCaption">Press play.</p>
-        </div>
-      </div>
-      <div class="timer-rail"><div class="timer-fill" id="walkProgress" style="width:0%"></div></div>
-      <div class="controls">
-        <button class="btn primary" id="walkPlay">▶ Play</button>
-        <button class="btn" id="walkRestart">Restart</button>
-        <button class="btn" id="walkPrev">← Prev</button>
-        <button class="btn" id="walkNext">Next →</button>
-        <select class="btn" id="walkSpeed">
-          <option value="0.75">0.75x</option>
-          <option value="1" selected>1x</option>
-          <option value="1.5">1.5x</option>
-          <option value="2">2x</option>
-        </select>
-        <label class="hint" style="display:flex;gap:6px;align-items:center">
-          <input type="checkbox" id="walkAutoNext" checked> autoplay next
-        </label>
-        <span class="hint">space to play/pause · ← → to switch episodes</span>
-      </div>
-    </div>
-    <div class="walk-list" id="walkList"></div>
-  </div>
-
-  <div class="callout" style="margin-top:8px">
-    Prefer order flow on a ladder instead of candles? The
-    <button class="btn" id="walkToTape" style="padding:2px 9px;font-size:.68rem;vertical-align:1px">Tape simulator</button>
-    runs five scripted scenarios the same way — autoplaying, with live captions on the ladder and tape itself.
-  </div>
-</div>
-
-<!-- ============================ DRILL ============================ -->
-<div id="drill" class="tab-content">
-  <h2>Drill</h2>
-  <p class="lede">Name the pattern before the clock runs out. Three correct in a row and it gets
-  harder: less time, more options, and charts with more noise in them. Your best streak is stored on
-  this device only.</p>
-
-  <div class="controls">
-    <button class="btn primary" id="dStart">Start drill</button>
-    <button class="btn" id="dDaily">Today's five</button>
-    <button class="btn" id="dReset">Reset streak</button>
-  </div>
-
-  <div class="scoreline">
-    <span>streak <b id="dStreak">0</b></span>
-    <span>best <b id="dBest">0</b></span>
-    <span>correct <b id="dCorrect">0</b> / <b id="dTotal">0</b></span>
-    <span>level <b id="dLevel">1</b></span>
-    <span id="dDailyTag" class="hint"></span>
-    <span class="hint" id="dWeak"></span>
-  </div>
-
-  <div class="timer-rail"><div class="timer-fill" id="dTimer" style="width:100%"></div></div>
-
-  <div class="chart-shell">
-    <canvas id="chartDrill" width="1040" height="380"></canvas>
-  </div>
-
-  <div class="opt-grid" id="dOpts"></div>
-  <div id="dVerdict" class="verdict neutral">Press start. Keys 1 to 4 answer without the mouse.</div>
-</div>
-
-<!-- ============================ TRADING DESK ============================ -->
-<div id="desk" class="tab-content">
-  <h2>Trading desk</h2>
-  <p class="lede">The chart stops at the decision point, mid-pattern, before it resolves. Commit to a
-  direction or stand aside. Risk is fixed at $25, the target is 2R, and the remaining bars decide
-  what happens. Three losing R in a session and the desk closes.</p>
-
-  <div id="deskLock" class="locked" style="display:none"></div>
-
-  <div class="desk-grid">
-    <div>
-      <div class="chart-shell">
-        <canvas id="chartDesk" width="1040" height="420"></canvas>
-        <div class="chart-meta">
-          <span>symbol <b id="kSym">—</b></span>
-          <span>last <b id="kLast">—</b></span>
-          <span>stop distance <b id="kStop">—</b></span>
-          <span>shares <b id="kShares">—</b></span>
-          <span>risk <b>$25.00</b></span>
-          <span>context <b id="kCtx">—</b></span>
-        </div>
-      </div>
-      <div class="controls">
-        <button class="btn long" id="kLong">Buy</button>
-        <button class="btn short" id="kShort">Sell short</button>
-        <button class="btn flat" id="kFlat">Stand aside</button>
-        <button class="btn primary" id="kNext">Next setup</button>
-        <span class="hint">B buy · S short · A aside · N next</span>
-      </div>
-      <div id="kVerdict" class="verdict neutral">Press next setup to get your first chart.</div>
-      <div id="kGrade" class="grade">
-        <div>Before the next one: would you take that trade again, given only what you could see at the decision point?</div>
-        <div class="row">
-          <button class="btn long" id="gYes">Yes, same again</button>
-          <button class="btn short" id="gNo">No, I should have passed</button>
-        </div>
-        <div class="hint" style="margin-top:8px">This is the only score that separates variance from error. The report card keeps them apart.</div>
-      </div>
-    </div>
-
-    <div>
-      <div class="flow">
-        <h4>Order flow at the decision point</h4>
-        <div class="flow-split">
-          <div id="kLadder"></div>
-          <div class="flow-tape" id="kTape"></div>
-        </div>
-        <div class="ask-note" id="kFlowNote">The ladder and the last prints are part of the read. Candles alone are half the information.</div>
-      </div>
-    <div class="ledger">
-      <h3 style="margin-top:0;font-size:.8rem;color:var(--text-dim)">Account</h3>
-      <dl>
-        <dt>Equity</dt><dd id="kEquity">$25,000.00</dd>
-        <dt>Session P&amp;L</dt><dd id="kPnl">$0.00</dd>
-        <dt>Session R</dt><dd id="kR">0.00R</dd>
-        <dt>Trades</dt><dd id="kTrades">0</dd>
-        <dt>Win rate</dt><dd id="kWin">—</dd>
-        <dt>Stood aside</dt><dd id="kAside">0</dd>
-      </dl>
-      <canvas class="equity-canvas" id="equityCanvas" width="560" height="128"></canvas>
-      <button class="btn" id="kNewDay" style="width:100%">Start a new session</button>
-      <div class="log" id="kLog"></div>
-    </div>
-    </div>
-  </div>
-</div>
-
-<!-- ============================ REPORT CARD ============================ -->
-<div id="report" class="tab-content">
-  <h2>Report card</h2>
-  <p class="lede">Every desk trade is kept on this device, across sessions. The point of the table
-  below is not your profit — it is whether your process and your results line up, which is the only
-  thing that tells you if an edge exists or you have just been lucky.</p>
-
-  <div class="panel">
-    <h3 style="margin-top:0">Rank and XP</h3>
-    <div class="rank-top">
-      <div><span class="rank-name" id="rankName2">Observer</span> <span class="rank-xp">· <b id="rankXp2">0</b> XP</span></div>
-      <span class="rank-xp" id="rankNextTxt2">—</span>
-    </div>
-    <div class="xp-bar"><i id="rankBar2"></i></div>
-    <p class="hint" id="xpBreakdown" style="margin-top:10px"></p>
-  </div>
-
-  <h3>Badges</h3>
-  <div class="badge-grid" id="badgeGrid"></div>
-
-  <h3>Statistical edge — the Quant Lab formulas, run on your own trades</h3>
-  <p class="hint" style="max-width:66ch">This is Lesson 15's math applied to whatever you've logged
-  on the desk so far. Read the sample-size note before trusting anything else on this page.</p>
-  <div class="stat-row" id="quantRow"></div>
-  <p class="hint" id="quantVerdict" style="margin-bottom:18px"></p>
-
-  <div class="stat-row">
-    <div class="stat"><b id="sTrades">0</b><span>trades logged</span></div>
-    <div class="stat"><b id="sExp">—</b><span>expectancy per trade</span></div>
-    <div class="stat"><b id="sWin">—</b><span>win rate</span></div>
-    <div class="stat"><b id="sTotal">—</b><span>total R</span></div>
-    <div class="stat"><b id="sAside">0</b><span>passes taken</span></div>
-
-  </div>
-
-  <div class="chart-shell"><canvas id="reportCurve" width="1040" height="200"></canvas></div>
-
-  <h3>Process against outcome</h3>
-  <p class="hint" style="max-width:66ch">A healthy record has a large top-left box and a large
-  top-right box. Losses you would take again are the cost of the business. Wins you would not take
-  again are the dangerous ones — they teach you to repeat something that only worked once.</p>
-  <div class="matrix" id="matrix"></div>
-
-  <h3>With the day's bias, or against it</h3>
-  <p class="hint" style="max-width:66ch">Lesson 7 said trade longs above VWAP and shorts below it,
-  all else equal. Every desk trade is tagged with which one it was, so this is not a guess.</p>
-  <div class="stat-row">
-    <div class="stat"><b id="biasWith">—</b><span>trades with the bias</span></div>
-    <div class="stat"><b id="biasAgainst">—</b><span>trades against the bias</span></div>
-  </div>
-
-  <h3>By pattern</h3>
-  <div class="scroll-x"><table class="dt" id="patTable"></table></div>
-  <div class="weak" id="leak" style="margin-top:12px"></div>
-
-  <h3>Journal</h3>
-  <p class="hint">Copy this into a spreadsheet if you want to keep it somewhere real. Nothing is
-  uploaded anywhere.</p>
-  <textarea id="journalOut" spellcheck="false" readonly></textarea>
-  <div class="controls" style="margin-top:10px">
-    <button class="btn" id="jRefresh">Refresh</button>
-    <button class="btn" id="jClear">Erase everything</button>
-    <span class="hint" id="jMsg"></span>
-  </div>
-</div>
-
-<!-- ============================ TAPE SIM ============================ -->
-<div id="tape" class="tab-content">
-  <h2>Tape simulator</h2>
-  <p class="lede">Scripted order flow on a Level 2 ladder with a running tape. The coach line tells
-  you what to look at while it happens, so you learn where your eyes should be. Scenarios D and E are
-  considerably harder than the first three.</p>
-
-  <div class="controls">
-    <select class="btn" id="scenarioSelect">
-      <option value="A">A — absorption at support, long</option>
-      <option value="B">B — supply breaks the bid, short</option>
-      <option value="C">C — spoofed wall, no trade</option>
-      <option value="D">D — trend day initiative push, long</option>
-      <option value="E">E — multi-level liquidity sweep, both ways</option>
-    </select>
-    <button class="btn primary" id="playBtn">Play</button>
-    <button class="btn" id="pauseBtn">Pause</button>
-    <button class="btn" id="resetBtn">Reset</button>
-    <select class="btn" id="speedSelect">
-      <option value="1200">slow</option>
-      <option value="700" selected>normal</option>
-      <option value="320">fast</option>
-    </select>
-  </div>
-
-  <div id="coachBox">Pick a scenario and press play.</div>
-
-  <div class="chart-shell"><canvas id="simChart" width="1040" height="210"></canvas></div>
-
-  <div class="pressure-labels"><span>selling pressure</span><span>buying pressure</span></div>
-  <div class="pressure"><div id="pSell" style="width:50%"></div><div id="pBuy" style="width:50%"></div></div>
-
-  <div class="sim-grid">
-    <div class="sim-panel">
-      <h3>Level 2</h3>
-      <div id="l2Panel"></div>
-    </div>
-    <div class="sim-panel">
-      <h3>Time and sales</h3>
-      <div class="tape-scroll" id="tapePanel"></div>
-    </div>
-  </div>
-
-  <div class="panel" id="simCheck" style="display:none">
-    <h3 style="margin-top:0">Quick check</h3>
-    <p class="stem mono" id="simCheckQ" style="font-family:var(--mono);font-size:.85rem"></p>
-    <div class="opt-grid" id="simCheckOpts"></div>
-    <div id="simCheckVerdict" class="verdict neutral" style="display:none"></div>
-  </div>
-</div>
-
-<!-- ============================ YOUR DATA ============================ -->
-<div id="data" class="tab-content">
-  <h2>Your data</h2>
-  <p class="lede">Generated charts are good for reps, but they are not the market. Paste real
-  historical bars here and the same chart engine, profile and bar-by-bar replay run on genuine
-  history instead.</p>
-
-  <div class="panel">
-    <h3>Paste CSV</h3>
-    <p class="hint">One row per bar. A header row is fine. Columns must include date, open, high, low,
-    close, and optionally volume — in that order. This is exactly the format Stooq and Yahoo hand you
-    when you download a CSV.</p>
-    <textarea id="csvBox" spellcheck="false" placeholder="Date,Open,High,Low,Close,Volume
-2024-03-01,182.50,184.20,181.90,183.75,48210000
-2024-03-04,183.60,184.40,181.10,181.55,52100000"></textarea>
-    <div class="controls" style="margin-top:10px">
-      <button class="btn primary" id="csvLoad">Load bars</button>
-      <button class="btn" id="csvDemo">Load a sample file</button>
-      <span class="hint" id="csvMsg"></span>
-    </div>
-  </div>
-
-  <div class="chart-shell">
-    <canvas id="chartReal" width="1040" height="420"></canvas>
-    <div class="chart-meta">
-      <span>bars loaded <b id="rCount">0</b></span>
-      <span>showing <b id="rShow">0</b></span>
-      <span>POC <b id="rPoc">—</b></span>
-      <span>value area <b id="rVa">—</b></span>
-    </div>
-  </div>
-
-  <div class="controls">
-    <button class="btn" id="rBack">Back one bar</button>
-    <button class="btn primary" id="rFwd">Next bar</button>
-    <button class="btn" id="rPlay">Play replay</button>
-    <button class="btn" id="rAll">Show all</button>
-    <span class="hint">replaying one bar at a time is the free version of tick replay: cover the
-    right side, decide, then advance</span>
-  </div>
-
-  <div class="panel">
-    <h3>Where to get the data free</h3>
-    <div class="scroll-x">
-    <table class="dt">
-      <tr><th>Source</th><th>What you get</th><th>Catch</th></tr>
-      <tr><td>Stooq</td><td>Daily and some intraday history as CSV, no signup</td><td>Coverage of small caps is patchy</td></tr>
-      <tr><td>Yahoo Finance</td><td>Daily history download on any quote page</td><td>Daily bars only through the UI</td></tr>
-      <tr><td>Alpha Vantage</td><td>Free API key, intraday down to one minute</td><td>Tight request limits</td></tr>
-      <tr><td>Finnhub / Twelve Data</td><td>Free tiers with intraday candles</td><td>Limited history depth on free plans</td></tr>
-      <tr><td>Nasdaq Data Link</td><td>Curated free datasets</td><td>Most equity intraday sets are paid</td></tr>
-      <tr><td>TradingView bar replay</td><td>Bar-by-bar replay on a free account</td><td>Daily bars only until you pay; no Level 2</td></tr>
-      <tr><td>Your own broker</td><td>Chart exports, often intraday</td><td>Needs a funded account</td></tr>
-    </table>
-    </div>
-    <div class="callout warn">
-      <strong>On tick-level replay.</strong> Platforms like DAS Replay let you replay a real session
-      tick by tick with the actual Level 2 book. There is no free equivalent, and that is not an
-      oversight: raw historical depth-of-book data is expensive because exchanges charge for it. Free
-      sources give you OHLCV bars, which is enough for structure, patterns and profile — everything
-      in Lessons 9, 10 and 13 — but not for practising the ladder. For ladder reps, use the tape
-      simulator here, then pay for replay once you are sure you want to keep going.
-    </div>
-  </div>
-</div>
-
-<!-- ============================ LEADERBOARD ============================ -->
-<div id="leaderboard" class="tab-content">
-  <h2>Leaderboard</h2>
-  <p class="lede">Ranked by XP across everyone using this page inside your organization. Nothing
-  about you is shown beyond your display name, your rank, and the same stats on your own report
-  card — no trade history, no symbols, nothing identifying beyond what you'd show a colleague.</p>
-
-  <div id="lbStatus" class="lb-empty">Checking whether a shared leaderboard is available here…</div>
-  <div id="lbBoard" style="display:none">
-    <div class="panel">
-      <h3 style="margin-top:0">By XP</h3>
-      <div id="lbXp"></div>
-    </div>
-    <div class="panel">
-      <h3 style="margin-top:0">By proven edge</h3>
-      <p class="hint" style="max-width:60ch">Desk expectancy, ranked — but only among traders with at
-      least 20 logged trades, because anything less is not a sample yet. Lesson 15 explains why 20
-      is still a low bar.</p>
-      <div id="lbEdge"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ============================ QUIZ ============================ -->
-<div id="quiz" class="tab-content">
-  <h2>Quiz</h2>
-  <p class="lede">Twelve questions spanning the whole course. Each one explains itself after you
-  answer, right or wrong.</p>
-  <div class="scoreline"><span>score <b id="quizScore">0</b> / <b id="quizAsked">0</b></span></div>
-  <div id="quizBox"></div>
 </div>
 
 <!-- ============================ LIBRARY ============================ -->
@@ -2316,1819 +1850,5 @@ textarea{
 </div>
 
 </main>
-<script>
-"use strict";
-/* ============================================================
-   0. SHELL: nav, clock, hero ticker
-   ============================================================ */
-const $ = s => document.querySelector(s);
-const $$ = s => Array.from(document.querySelectorAll(s));
-
-$$('.nav-btn').forEach(b=>b.addEventListener('click',()=>{
-  $$('.nav-btn').forEach(x=>x.classList.remove('active'));
-  $$('.tab-content').forEach(x=>x.classList.remove('active'));
-  b.classList.add('active');
-  const t = document.getElementById(b.dataset.tab);
-  t.classList.add('active');
-  window.scrollTo({top:0,behavior:'instant'});
-  const tab=b.dataset.tab;                       // canvases size to 0 while hidden, so repaint on entry
-  if(tab==='charts'){ chartsState.bars ? paintCharts() : genChart(); }
-  if(tab==='walkthrough' && !WALK.bars) walkLoad(0, false);
-  if(tab==='desk'){ deskState.bars ? drawChart($('#chartDesk'),deskState.bars,
-      {mask:deskState.open?deskState.meta.decisionIdx:null,showProfile:true}) : nextSetup(); drawEquity(); }
-  if(tab==='drill' && drill.cur) drawChart($('#chartDrill'),drill.cur.bars,{showProfile:true});
-  if(tab==='data' && real.bars.length) paintReal();
-  if(tab==='report') renderReport();
-  if(tab==='leaderboard') initLeaderboard();
-  if(tab==='tape') simDraw();
-}));
-
-setInterval(()=>{
-  const d=new Date();
-  $('#clockOut').textContent=d.toTimeString().slice(0,8);
-},1000);
-
-/* hero ticker: clearly labelled as simulated */
-(function(){
-  const syms=['AAPL','NVDA','TSLA','AMD','MSFT','SPY','META','QQQ','COIN','PLTR','SOFI','MARA'];
-  const row=syms.map(s=>{
-    const up=Math.random()>.5, pct=(Math.random()*3.4+.1).toFixed(2);
-    return `<span>${s} <i class="${up?'up':'dn'}" style="font-style:normal">${up?'+':'−'}${pct}%</i></span>`;
-  }).join('');
-  const el=$('#heroTape');
-  el.innerHTML=row+row;
-  let x=0;
-  const w=el.scrollWidth/2;
-  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if(!reduce) setInterval(()=>{x=(x+.4)%w; el.scrollLeft=x;},30);
-})();
-
-/* ============================================================
-   1. RANDOMNESS
-   ============================================================ */
-function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
-let RNG = mulberry32((Math.random()*1e9)|0);
-const rnd = ()=>RNG();
-const between=(a,b)=>a+rnd()*(b-a);
-const pick=arr=>arr[Math.floor(rnd()*arr.length)];
-const gauss=()=>{let u=0,v=0;while(!u)u=rnd();while(!v)v=rnd();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
-
-const SYMS=['ARCL','VNTX','KRDO','BLSN','TOPQ','MRVA','SYLK','DYNE','HALO','QTRN','LUMA','FRSK','OCTA','NEVR','PXLT'];
-
-/* ============================================================
-   2. CHART GENERATOR
-   Every series: fresh price, volatility, length, noise character,
-   pre-pattern behaviour, and one embedded pattern.
-   ============================================================ */
-const PATTERNS = {
-  spring:     {label:'Spring — swept the lows and reclaimed',        bias:'long'},
-  upthrust:   {label:'Upthrust — swept the highs and rejected',      bias:'short'},
-  absorption: {label:'Absorption — the level held and turned price', bias:'reverse'},
-  initiative: {label:'Initiative break — it left and kept going',    bias:'with'},
-  fade:       {label:'Responsive fade — the break failed',           bias:'against'}
-};
-const PKEYS = Object.keys(PATTERNS);
-
-function makeSeries(want, difficulty){
-  difficulty = difficulty||1;
-  const pat = (!want||want==='any') ? pick(PKEYS) : want;
-  const n = Math.round(between(78,116));
-  const p0 = between(11,340);
-  const sigma = p0*between(.0035,.011)*(1+(difficulty-1)*.12);
-  const noiseMul = between(.7,1.5)*(1+(difficulty-1)*.18);
-  const rangeW = sigma*between(4.5,9);
-  const preDrift = between(-.25,.25)*sigma;
-  const up = rnd()>.5;
-
-  const closes=[]; const vols=[]; const marks=[]; const phase=[];
-  let p = p0;
-  const setup = Math.round(n*between(.42,.55));
-  const center = p0;
-  const hiL = center + rangeW/2, loL = center - rangeW/2;
-
-  // ---- phase 1: pre-pattern behaviour, varied on purpose ----
-  const style = pick(['range','wedge','drift','choppy']);
-  for(let i=0;i<setup;i++){
-    const t=i/setup;
-    let target;
-    if(style==='range')  target = center + Math.sin(t*Math.PI*between(2.2,4.4))*rangeW*.46;
-    else if(style==='wedge') target = center + Math.sin(t*Math.PI*3.1)*rangeW*.5*(1-t*.55);
-    else if(style==='drift') target = center + (up?1:-1)*rangeW*.34*t + Math.sin(t*Math.PI*2.6)*rangeW*.24;
-    else target = center + Math.sin(t*Math.PI*6.2)*rangeW*.4;
-    p = p*.55 + target*.45 + gauss()*sigma*.55*noiseMul + preDrift;
-    p = Math.min(hiL+sigma*.5, Math.max(loL-sigma*.5, p));
-    closes.push(p); vols.push(between(.55,1.35)*(1+Math.abs(gauss())*.25)); phase.push('setup');
-  }
-
-  let decisionIdx, level, dir;
-
-  // Not every clean pattern works. Roughly a third fail outright, and the ones
-  // that work usually hurt first. Without this the desk would be a memory test.
-  const failed = rnd() < (.30 + (difficulty-1)*.02);
-  const heat   = between(.5,1.5);
-
-  function resolveOut(startP, d, run){
-    let q = startP;
-    const eff = failed ? -d : d;
-    const adverse = Math.round(between(1,4));
-    for(let i=0;i<run;i++){
-      let step;
-      if(i<adverse){ step = -eff*sigma*heat*between(.2,.8); phase.push('adverse'); }
-      else {
-        const pace = failed ? between(.25,.75) : between(.5,1.25);
-        step = eff*sigma*pace*(1 + (i/run)*(failed?0:.45));
-        phase.push('run');
-      }
-      q += step + gauss()*sigma*(failed?.85:.65)*noiseMul;
-      closes.push(q); vols.push(between(.7,2.1));
-    }
-    return q;
-  }
-
-
-  // ---- phase 2 + 3: the pattern ----
-  if(pat==='spring' || pat==='upthrust'){
-    const down = pat==='spring';
-    level = down?loL:hiL;
-    const sweep = Math.round(between(2,4));
-    const depth = sigma*between(1.1,2.6);
-    for(let i=0;i<sweep;i++){
-      p = level + (down?-1:1)*depth*((i+1)/sweep) + gauss()*sigma*.3;
-      closes.push(p); vols.push(between(1.7,3.4)); phase.push('sweep');
-    }
-    // reclaim bar — this is the decision point
-    p = level + (down?1:-1)*sigma*between(.25,.8);
-    closes.push(p); vols.push(between(2.0,3.6)); phase.push('reclaim');
-    decisionIdx = closes.length-1;
-    marks.push({i:decisionIdx-Math.round(sweep/2), text:down?'sweep':'sweep'});
-    dir = down?1:-1;
-    p = resolveOut(p, dir, n-closes.length);
-  }
-  else if(pat==='absorption'){
-    const fromBelow = rnd()>.5;
-    level = fromBelow?hiL:loL;
-    const approach = Math.round(between(5,9));
-    for(let i=0;i<approach;i++){
-      p += (fromBelow?1:-1)*sigma*between(.5,1.1) + gauss()*sigma*.4;
-      closes.push(p); vols.push(between(.9,1.8)); phase.push('approach');
-    }
-    p = level + gauss()*sigma*.18;
-    const absorb = Math.round(between(6,11));
-    for(let i=0;i<absorb;i++){
-      p = level + gauss()*sigma*between(.12,.3);
-      closes.push(p); vols.push(between(2.4,4.2)); phase.push('absorb');  // huge effort
-      if(i===Math.floor(absorb/2)) marks.push({i:closes.length-1,text:'effort, no result'});
-    }
-    p = level + (fromBelow?-1:1)*sigma*between(.4,.9);
-    closes.push(p); vols.push(between(1.8,3.0)); phase.push('reclaim');
-    decisionIdx = closes.length-1;
-    dir = fromBelow?-1:1;
-    p = resolveOut(p, dir, n-closes.length);
-  }
-  else if(pat==='initiative' || pat==='fade'){
-    const upBreak = rnd()>.5;
-    level = upBreak?hiL:loL;
-    const push = Math.round(between(3,5));
-    for(let i=0;i<push;i++){
-      p = level + (upBreak?1:-1)*sigma*between(.5,1.4)*(i+1)/push*1.4;
-      closes.push(p); vols.push(pat==='initiative'?between(1.8,3.4):between(.8,1.7)); phase.push('push');
-    }
-    decisionIdx = closes.length-1;
-    marks.push({i:decisionIdx,text:'break'});
-    if(pat==='initiative'){
-      dir = upBreak?1:-1;
-      p = resolveOut(p, dir, n-closes.length);
-    }else{
-      dir = upBreak?-1:1;
-      const stall=Math.round(between(3,6));
-      for(let i=0;i<stall;i++){ p += gauss()*sigma*.55; closes.push(p); vols.push(between(.5,1.1)); phase.push('stall'); }
-      p = resolveOut(p, dir, n-closes.length);
-    }
-  }
-
-  // ---- delta: aggressor-classified net volume per bar, engineered to match
-  // the named CVD-divergence patterns (Mastering Cumulative Delta, uploaded material) ----
-  const runEff = failed ? -dir : dir;
-  const deltas = closes.map((c,i)=>{
-    const tag=phase[i], vAmt=vols[i];
-    let d;
-    if(pat==='absorption' && tag==='absorb'){
-      // absorption-based divergence: CVD surges one way, price stays flat
-      d = (dir<0 ? 1 : -1) * vAmt * between(1.3,1.9);
-    } else if((pat==='spring'||pat==='upthrust') && tag==='sweep'){
-      const primary = pat==='spring' ? -1 : 1;           // classic divergence: price extends, delta doesn't confirm as hard
-      d = primary*vAmt*between(0.30,0.65);
-    } else if(tag==='reclaim'){
-      d = dir*vAmt*between(1.1,1.6);                     // the tell itself: sharp, confirming
-    } else if(pat==='fade' && tag==='push'){
-      d = (-dir)*vAmt*between(0.15,0.4);                  // weak participation behind the break
-    } else if(pat==='initiative' && tag==='push'){
-      d = dir*vAmt*between(1.2,1.8);                      // real initiative: delta leads price
-    } else if(tag==='adverse'){
-      d = -runEff*vAmt*between(0.35,0.75);
-    } else if(tag==='run'){
-      d = runEff*vAmt*between(0.75,1.3)*(1+i/closes.length*.3);
-    } else {
-      const priceChg = i===0?0:c-closes[i-1];
-      d = (priceChg>=0?1:-1)*vAmt*between(0.3,0.7);
-    }
-    return d + gauss()*vAmt*0.22;
-  });
-
-  // ---- closes → OHLCV with varied candle character ----
-  const wickChar = between(.35,1.05);
-  const bars=[];
-  for(let i=0;i<closes.length;i++){
-    const c=closes[i];
-    const o = i===0 ? c - gauss()*sigma*.3 : closes[i-1] + gauss()*sigma*.16;
-    const body=Math.abs(c-o);
-    const wu = Math.abs(gauss())*sigma*wickChar*(vols[i]*.5+.5);
-    const wd = Math.abs(gauss())*sigma*wickChar*(vols[i]*.5+.5);
-    bars.push({o, c, h:Math.max(o,c)+wu, l:Math.min(o,c)-wd, v:Math.max(.12,vols[i]), delta:deltas[i]});
-  }
-  // exaggerate the rejection wick on the signature bar
-  if(pat==='spring') bars[decisionIdx].l = Math.min(bars[decisionIdx].l, level - sigma*between(1.4,2.6));
-  if(pat==='upthrust') bars[decisionIdx].h = Math.max(bars[decisionIdx].h, level + sigma*between(1.4,2.6));
-
-  const CVD_READ = {
-    spring:'Classic bullish divergence — price presses to a new low, CVD does not confirm it',
-    upthrust:'Classic bearish divergence — price presses to a new high, CVD does not confirm it',
-    absorption:'Absorption-based divergence — CVD surges hard, price goes nowhere',
-    initiative:'No divergence — delta leads price, a healthy confirming trend',
-    fade:'Weak participation — the break prints, but delta never really shows up behind it'
-  };
-
-  return {bars, pattern:pat, label:PATTERNS[pat].label, decisionIdx, level,
-          sym:pick(SYMS), sigma, dir, failed, cvdRead:CVD_READ[pat]};
-}
-
-/* ============================================================
-   2b. ORDER FLOW AT THE DECISION POINT
-   The ladder and tape a reader would actually have in front of them.
-   Deliberately imperfect: sometimes the flow is ambiguous, and a pattern
-   that fails can still look textbook right up until it doesn't.
-   ============================================================ */
-function makeFlow(m){
-  const px=m.bars[m.decisionIdx].c, tick=Math.max(.01, +(m.sigma*.22).toFixed(2));
-  const base=()=>Math.round(between(600,2400)/100)*100;
-  let bid=[0,0,0,0,0].map(base), ask=[0,0,0,0,0].map(base);
-  const prints=[]; let note='';
-  const ambiguous = rnd()<.22;                   // some reads simply are not there
-  const push=(size,side,off)=>prints.push({px:+(px+ (off||0)*tick).toFixed(2), size:Math.round(size/100)*100, side});
-
-  const heavy=()=>Math.round(between(3200,9000)/100)*100;
-  const thin =()=>Math.round(between(200,700)/100)*100;
-
-  if(m.pattern==='spring'){
-    bid[0]=heavy(); ask=ask.map(v=>Math.round(v*between(.5,.8)));
-    for(let i=0;i<5;i++) push(between(700,1900),'S',-(i%3));
-    for(let i=0;i<4;i++) push(between(500,1500),'B',0);
-    note='Big prints hit the lows, the bid down there kept refilling, and the last few are green.';
-  } else if(m.pattern==='upthrust'){
-    ask[0]=heavy(); bid=bid.map(v=>Math.round(v*between(.5,.8)));
-    for(let i=0;i<5;i++) push(between(700,1900),'B',i%3);
-    for(let i=0;i<4;i++) push(between(500,1500),'S',0);
-    note='Buyers paid up into the highs, size appeared against them, and the last prints turned red.';
-  } else if(m.pattern==='absorption'){
-    const sellSide = m.dir<0;
-    if(sellSide){ ask[0]=heavy(); } else { bid[0]=heavy(); }
-    for(let i=0;i<8;i++) push(between(900,2600), sellSide?'B':'S', 0);
-    note='Enormous size on one side of the inside market, traded against repeatedly, price unchanged.';
-  } else if(m.pattern==='initiative'){
-    if(m.dir>0){ ask=ask.map(thin); bid=bid.map(v=>Math.round(v*between(1.2,2.0))); }
-    else { bid=bid.map(thin); ask=ask.map(v=>Math.round(v*between(1.2,2.0))); }
-    for(let i=0;i<9;i++) push(between(900,2400), m.dir>0?'B':'S', 0);
-    note='The book ahead of price is thin and every print is on the same side.';
-  } else {                                        // fade
-    const brokeUp = m.dir<0;
-    if(brokeUp){ ask[0]=Math.round(between(2600,5200)/100)*100; }
-    else { bid[0]=Math.round(between(2600,5200)/100)*100; }
-    for(let i=0;i<8;i++) push(between(200,800), brokeUp?'B':'S', 0);
-    note='The break is happening on small prints, and size is rebuilding against it.';
-  }
-
-  if(ambiguous){                                  // scramble: no clean read available
-    bid=bid.map(()=>base()); ask=ask.map(()=>base());
-    prints.length=0;
-    for(let i=0;i<9;i++) push(between(200,900), rnd()>.5?'B':'S', 0);
-    note='Mixed, unremarkable flow. Nothing here confirms anything.';
-  }
-  for(let i=prints.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[prints[i],prints[j]]=[prints[j],prints[i]]}
-  return {bid,ask,prints:prints.slice(0,10),note,px,tick,ambiguous};
-}
-
-/* session VWAP, aligned with bars */
-function vwapOf(bars){
-  let pv=0,vv=0; return bars.map(b=>{const tp=(b.h+b.l+b.c)/3; pv+=tp*b.v; vv+=b.v; return pv/vv});
-}
-/* cumulative volume delta — running sum of each bar's signed, aggressor-classified volume */
-function cvdOf(bars){
-  let c=0; return bars.map(b=>c+=(b.delta||0));
-}
-/* naive divergence check: compare the sign of the price move against the sign of
-   the CVD move over the same lookback window — used only for a live label while
-   scrubbing generated charts, not as a trading signal in itself (Lesson 17) */
-function divergenceRead(bars, cvd, upto, look){
-  look=look||12;
-  const i=Math.min(upto, bars.length-1), j=Math.max(0,i-look);
-  const priceMove=bars[i].c-bars[j].c, cvdMove=cvd[i]-cvd[j];
-  const priceExtreme=Math.max(...bars.slice(j,i+1).map(b=>b.c))-Math.min(...bars.slice(j,i+1).map(b=>b.c));
-  if(priceExtreme < 1e-9) return 'Flat — not enough range yet to read';
-  const agree = (priceMove>=0)===(cvdMove>=0);
-  const cvdWeak = Math.abs(cvdMove) < Math.abs(priceMove)*bars[i].v*0.4;
-  if(agree && !cvdWeak) return 'Confirming — price and CVD moving together';
-  if(!agree) return (priceMove>0?'Bearish':'Bullish')+' divergence — price and CVD disagree on direction';
-  return 'Weak — price moved, CVD barely followed';
-}
-
-/* ============================================================
-   3. VOLUME PROFILE
-   ============================================================ */
-function buildProfile(bars, buckets){
-  buckets = buckets||42;
-  let lo=Infinity, hi=-Infinity;
-  bars.forEach(b=>{lo=Math.min(lo,b.l);hi=Math.max(hi,b.h)});
-  const step=(hi-lo)/buckets || 1;
-  const vol=new Array(buckets).fill(0);
-  const volA=new Array(buckets).fill(0), volB=new Array(buckets).fill(0);
-  const half=bars.length/2;
-  bars.forEach((b,i)=>{
-    const a=Math.max(0,Math.floor((b.l-lo)/step)), z=Math.min(buckets-1,Math.floor((b.h-lo)/step));
-    const share=b.v/Math.max(1,(z-a+1));
-    for(let k=a;k<=z;k++){vol[k]+=share; (i<half?volA:volB)[k]+=share;}
-  });
-  const total=vol.reduce((a,b)=>a+b,0);
-  let poc=0; vol.forEach((v,i)=>{if(v>vol[poc])poc=i});
-  let lo_i=poc, hi_i=poc, acc=vol[poc];
-  while(acc<total*.7 && (lo_i>0||hi_i<buckets-1)){
-    const dn = lo_i>0?vol[lo_i-1]:-1, upv = hi_i<buckets-1?vol[hi_i+1]:-1;
-    if(upv>=dn){hi_i++;acc+=vol[hi_i]}else{lo_i--;acc+=vol[lo_i]}
-  }
-  return {lo,hi,step,vol,volA,volB,poc,vaLo:lo_i,vaHi:hi_i,max:Math.max(...vol),
-          pocPrice:lo+(poc+.5)*step, vaLoPrice:lo+lo_i*step, vaHiPrice:lo+(hi_i+1)*step};
-}
-
-/* ============================================================
-   4. CANDLE RENDERER
-   ============================================================ */
-const CSS = getComputedStyle(document.documentElement);
-const C = {
-  bg:'#0A0F16', grid:'#141b24', text:'#7E8C9C', up:'#3FB950', dn:'#E5534B',
-  phos:'#F0A93B', blue:'#58A6FF', violet:'#A98BFF', dim:'#253140'
-};
-
-function fitCanvas(cv){
-  const dpr=window.devicePixelRatio||1;
-  const w=cv.clientWidth || cv.parentElement.clientWidth || 900, h=parseInt(cv.getAttribute('height'));
-  cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
-  cv.style.height=h+'px';
-  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
-  return {ctx,w,h};
-}
-
-function drawChart(cv, bars, opt){
-  opt=opt||{};
-  const {ctx,w,h}=fitCanvas(cv);
-  ctx.clearRect(0,0,w,h);
-  ctx.fillStyle=C.bg; ctx.fillRect(0,0,w,h);
-  if(!bars||!bars.length) return;
-
-  const profW = opt.showProfile===false?0:Math.round(w*.15);
-  const padL=8, padR=52+profW, padT=14, volH=Math.round(h*.20), padB=18;
-  const plotW=w-padL-padR, plotH=h-padT-volH-padB;
-
-  const vis = opt.mask!=null ? bars.slice(0,opt.mask+1) : bars;
-  let lo=Infinity,hi=-Infinity,vmax=0;
-  vis.forEach(b=>{lo=Math.min(lo,b.l);hi=Math.max(hi,b.h);vmax=Math.max(vmax,b.v)});
-  if(opt.trade){lo=Math.min(lo,opt.trade.stop,opt.trade.target);hi=Math.max(hi,opt.trade.stop,opt.trade.target)}
-  const pad=(hi-lo)*.06; lo-=pad; hi+=pad;
-  const N = opt.mask!=null ? bars.length : vis.length;
-  const cw = plotW/N;
-  const X = i => padL + i*cw + cw/2;
-  const Y = p => padT + (hi-p)/(hi-lo)*plotH;
-
-  // grid + price axis
-  ctx.font='10px "IBM Plex Mono", monospace'; ctx.textBaseline='middle';
-  ctx.strokeStyle=C.grid; ctx.lineWidth=1;
-  for(let k=0;k<=5;k++){
-    const y=padT+plotH*k/5, p=hi-(hi-lo)*k/5;
-    ctx.beginPath();ctx.moveTo(padL,y+.5);ctx.lineTo(padL+plotW,y+.5);ctx.stroke();
-    ctx.fillStyle=C.text; ctx.textAlign='left';
-    ctx.fillText(p.toFixed(2), padL+plotW+6, y);
-  }
-
-  // profile
-  if(profW>0){
-    const pr=buildProfile(vis, 46);
-    const px0=padL+plotW+46;
-    for(let i=0;i<pr.vol.length;i++){
-      const y0=Y(pr.lo+(i+1)*pr.step), y1=Y(pr.lo+i*pr.step);
-      const bw=pr.vol[i]/pr.max*(profW-8);
-      const inVa = i>=pr.vaLo && i<=pr.vaHi;
-      ctx.fillStyle = i===pr.poc ? C.phos : (inVa?'#2f6598':C.dim);
-      ctx.globalAlpha = i===pr.poc?.95:(inVa?.7:.55);
-      ctx.fillRect(px0, y0, Math.max(1,bw), Math.max(1,y1-y0-1));
-    }
-    ctx.globalAlpha=1;
-    ctx.strokeStyle=C.phos; ctx.setLineDash([3,3]); ctx.beginPath();
-    ctx.moveTo(padL,Y(pr.pocPrice)+.5); ctx.lineTo(padL+plotW+profW+46,Y(pr.pocPrice)+.5); ctx.stroke();
-    ctx.setLineDash([]);
-    if(opt.profileOut) opt.profileOut(pr);
-  }
-
-  // level line
-  if(opt.level!=null && opt.showLevel!==false){
-    ctx.strokeStyle='#4a5763'; ctx.setLineDash([5,4]); ctx.beginPath();
-    ctx.moveTo(padL,Y(opt.level)+.5); ctx.lineTo(padL+plotW,Y(opt.level)+.5); ctx.stroke(); ctx.setLineDash([]);
-  }
-
-  // trade lines
-  if(opt.trade){
-    const t=opt.trade;
-    const band=(a,b,col,alpha)=>{ctx.globalAlpha=alpha;ctx.fillStyle=col;
-      ctx.fillRect(X(t.at), Math.min(Y(a),Y(b)), plotW-(X(t.at)-padL), Math.abs(Y(a)-Y(b)));ctx.globalAlpha=1};
-    band(t.entry,t.target,C.up,.09); band(t.entry,t.stop,C.dn,.10);
-    [['entry',t.entry,C.phos],['stop',t.stop,C.dn],['target',t.target,C.up]].forEach(([lab,p,col])=>{
-      ctx.strokeStyle=col;ctx.setLineDash([4,3]);ctx.beginPath();
-      ctx.moveTo(X(t.at),Y(p)+.5);ctx.lineTo(padL+plotW,Y(p)+.5);ctx.stroke();ctx.setLineDash([]);
-      ctx.fillStyle=col;ctx.textAlign='right';ctx.fillText(lab, padL+plotW-4, Y(p)-7);
-    });
-  }
-
-  // candles
-  const bw=Math.max(1.2,cw*.62);
-  vis.forEach((b,i)=>{
-    const x=X(i), col=b.c>=b.o?C.up:C.dn;
-    ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=1;
-    ctx.beginPath(); ctx.moveTo(Math.round(x)+.5,Y(b.h)); ctx.lineTo(Math.round(x)+.5,Y(b.l)); ctx.stroke();
-    const y0=Y(Math.max(b.o,b.c)), y1=Y(Math.min(b.o,b.c));
-    ctx.fillRect(x-bw/2, y0, bw, Math.max(1,y1-y0));
-  });
-
-  // session VWAP
-  if(opt.vwap){
-    ctx.strokeStyle=C.violet; ctx.lineWidth=1.2; ctx.globalAlpha=.85; ctx.beginPath();
-    vis.forEach((b,i)=>{const y=Y(opt.vwap[i]); i?ctx.lineTo(X(i),y):ctx.moveTo(X(i),y)});
-    ctx.stroke(); ctx.globalAlpha=1;
-    ctx.fillStyle=C.violet; ctx.textAlign='left';
-    ctx.fillText('vwap', X(vis.length-1)-30, Y(opt.vwap[vis.length-1])-8);
-  }
-
-  // volume
-  const vy=padT+plotH+10;
-  vis.forEach((b,i)=>{
-    const hgt=b.v/vmax*(volH-12);
-    ctx.fillStyle=b.c>=b.o?C.up:C.dn; ctx.globalAlpha=.42;
-    ctx.fillRect(X(i)-bw/2, vy+(volH-12)-hgt, bw, hgt);
-  });
-  ctx.globalAlpha=1;
-  ctx.strokeStyle=C.grid;ctx.beginPath();ctx.moveTo(padL,vy-1.5);ctx.lineTo(padL+plotW,vy-1.5);ctx.stroke();
-
-  // decision cut
-  if(opt.mask!=null && opt.mask<bars.length-1){
-    const x=X(opt.mask)+cw*.6;
-    ctx.strokeStyle=C.phos;ctx.globalAlpha=.6;ctx.setLineDash([2,3]);
-    ctx.beginPath();ctx.moveTo(x,padT);ctx.lineTo(x,padT+plotH+volH);ctx.stroke();
-    ctx.setLineDash([]);ctx.globalAlpha=1;
-    ctx.fillStyle=C.phos;ctx.textAlign='left';ctx.fillText('decide here', x+5, padT+9);
-  }
-
-  // annotations
-  (opt.marks||[]).forEach(m=>{
-    if(m.i>=vis.length) return;
-    const b=vis[m.i], x=X(m.i), y=Y(b.l)+16;
-    ctx.fillStyle=C.phos;ctx.textAlign='center';
-    ctx.fillText(m.text, Math.min(Math.max(x,40), padL+plotW-40), y);
-  });
-
-  if(opt.title){ctx.fillStyle=C.text;ctx.textAlign='left';ctx.fillText(opt.title,padL+2,padT-4);}
-  return {Y,X};
-}
-
-/* ============================================================
-   5. 3D VOLUME PROFILE
-   ============================================================ */
-function draw3D(cv, bars, rotDeg, tiltDeg){
-  const {ctx,w,h}=fitCanvas(cv);
-  ctx.clearRect(0,0,w,h); ctx.fillStyle=C.bg; ctx.fillRect(0,0,w,h);
-  if(!bars||!bars.length) return;
-  const pr=buildProfile(bars, 30);
-  const rot=rotDeg*Math.PI/180, tilt=tiltDeg*Math.PI/180;
-  const depth=Math.min(120, w*.13);
-  const dx=Math.sin(rot)*depth, dy=-Math.cos(tilt)*depth*.45;
-  const nb=pr.vol.length;
-  const bh=Math.min(15,(h-90)/nb);
-  const ox=w*.24 - dx, oy=h-46;
-  const maxL=Math.min(w*.46, 330);
-  const P=(x,y,z)=>[ox+x+z*dx, oy-y+z*dy];
-  const face=(pts,fill,stroke)=>{
-    ctx.beginPath(); pts.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));
-    ctx.closePath(); ctx.fillStyle=fill; ctx.fill();
-    if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=.6;ctx.stroke()}
-  };
-  ctx.font='9px "IBM Plex Mono", monospace'; ctx.textBaseline='middle';
-
-  // floor grid
-  for(let k=0;k<=4;k++){
-    const x=maxL*k/4;
-    const a=P(x,0,0), b=P(x,0,1);
-    ctx.strokeStyle=C.grid;ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();
-  }
-
-  const maxBoth=Math.max(...pr.volA, ...pr.volB)||1;
-  for(let i=nb-1;i>=0;i--){                     // painter's algorithm, top-down
-    const y=i*bh;
-    const price=pr.lo+(i+.5)*pr.step;
-    const inVa=i>=pr.vaLo&&i<=pr.vaHi, isPoc=i===pr.poc;
-    [[pr.volA[i],1,'back'],[pr.volB[i],0,'front']].forEach(([v,z])=>{
-      const L=v/maxBoth*maxL; if(L<.6) return;
-      const base = isPoc?[240,169,59]:(inVa?[88,120,175]:[46,60,76]);
-      const shade=z===1?.62:1;
-      const fill=`rgb(${base.map(c=>Math.round(c*shade)).join(',')})`;
-      const fillTop=`rgb(${base.map(c=>Math.round(Math.min(255,c*shade*1.35))).join(',')})`;
-      const fillSide=`rgb(${base.map(c=>Math.round(c*shade*.65)).join(',')})`;
-      const d=0.42;
-      const p000=P(0,y,z*d),p100=P(L,y,z*d),p110=P(L,y+bh-1.6,z*d),p010=P(0,y+bh-1.6,z*d);
-      const p001=P(0,y,z*d+d),p101=P(L,y,z*d+d),p111=P(L,y+bh-1.6,z*d+d),p011=P(0,y+bh-1.6,z*d+d);
-      face([p010,p110,p111,p011],fillTop);            // top
-      face([p100,p101,p111,p110],fillSide);           // right end
-      face([p000,p100,p110,p010],fill,'rgba(0,0,0,.35)'); // front
-    });
-    if(isPoc){
-      const p=P(maxL*.02,y+bh*.5,0);
-      ctx.fillStyle=C.phos;ctx.textAlign='left';
-      ctx.fillText('POC '+price.toFixed(2), P(maxL,y,0)[0]+8, P(0,y+bh*.5,0)[1]);
-    }
-  }
-  ctx.fillStyle=C.text;ctx.textAlign='left';
-  ctx.fillText('volume →', ox+maxL*.35, oy+24);
-  ctx.fillText('price ↑', 10, 18);
-  ctx.fillStyle='#7E8C9C';
-  ctx.fillText('back slab: first half of session   ·   front slab: second half', 10, h-12);
-}
-</script>
-<script>
-"use strict";
-/* ============================================================
-   6. CHARTS TAB
-   ============================================================ */
-const chartsState={bars:null,meta:null,revealed:false};
-let p3rot=24,p3tilt=22,p3spinTimer=null;
-
-function drawCVD(cv, bars, revealed){
-  const {ctx,w,h}=fitCanvas(cv);
-  ctx.clearRect(0,0,w,h); ctx.fillStyle=C.bg; ctx.fillRect(0,0,w,h);
-  if(!bars||!bars.length) return;
-  const cvd=cvdOf(bars);
-  const padL=8,padR=8,padT=10,padB=8,plotW=w-padL-padR,plotH=h-padT-padB;
-  let lo=Math.min(0,...cvd), hi=Math.max(0,...cvd); const pad=(hi-lo)*.1||1; lo-=pad; hi+=pad;
-  const N=bars.length, cw=plotW/N, X=i=>padL+i*cw+cw/2, Y=v=>padT+(hi-v)/(hi-lo)*plotH;
-  ctx.strokeStyle=C.grid; ctx.beginPath(); ctx.moveTo(padL,Y(0)+.5); ctx.lineTo(padL+plotW,Y(0)+.5); ctx.stroke();
-  ctx.beginPath();
-  cvd.forEach((v,i)=>{ i? ctx.lineTo(X(i),Y(v)) : ctx.moveTo(X(i),Y(v)); });
-  ctx.strokeStyle=C.blue; ctx.lineWidth=1.6; ctx.stroke();
-  // fill under the line, tinted by sign, so a sustained one-sided push (absorption) reads at a glance
-  ctx.lineTo(X(N-1),Y(0)); ctx.lineTo(X(0),Y(0)); ctx.closePath();
-  ctx.fillStyle=cvd[N-1]>=0?'rgba(88,166,255,.10)':'rgba(88,166,255,.10)'; ctx.fill();
-  ctx.font='10px "IBM Plex Mono", monospace'; ctx.fillStyle=C.text; ctx.textAlign='left';
-  ctx.fillText('CVD', padL+2, padT+8);
-  $('#cCvdVal').textContent=cvd[N-1].toFixed(0);
-  $('#cCvdRead').textContent = revealed ? '' : 'Lesson 17 — read this before you reveal';
-}
-function paintCharts(){
-  const s=chartsState; if(!s.bars) return;
-  drawChart($('#chartMain'), s.bars, {
-    showProfile:$('#cProfile').checked,
-    level:s.meta.level,
-    showLevel:s.revealed,
-    vwap:vwapOf(s.bars),
-    marks:s.revealed?s.marks:[],
-    profileOut:pr=>{
-      $('#cPoc').textContent=pr.pocPrice.toFixed(2);
-      $('#cVa').textContent=pr.vaLoPrice.toFixed(2)+' – '+pr.vaHiPrice.toFixed(2);
-    }
-  });
-  draw3D($('#profile3d'), s.bars, p3rot, p3tilt);
-  $('#cvdShell').style.display = $('#cCVD').checked ? '' : 'none';
-  if($('#cCVD').checked) drawCVD($('#chartCVD'), s.bars, s.revealed);
-}
-function genChart(){
-  const want=$('#cPattern').value;
-  const m=makeSeries(want,1);
-  chartsState.bars=m.bars; chartsState.meta=m; chartsState.revealed=false;
-  chartsState.marks=[{i:m.decisionIdx,text:'here'}];
-  let lo=Infinity,hi=-Infinity; m.bars.forEach(b=>{lo=Math.min(lo,b.l);hi=Math.max(hi,b.h)});
-  $('#cSym').textContent=m.sym; $('#cBars').textContent=m.bars.length;
-  $('#cRange').textContent=lo.toFixed(2)+' – '+hi.toFixed(2);
-  $('#cVerdict').className='verdict neutral';
-  $('#cVerdict').textContent='What is it? Look at where volume clustered, what happened at the level, and whether effort matched result. Then reveal.';
-  paintCharts();
-}
-$('#cGen').addEventListener('click',genChart);
-$('#cProfile').addEventListener('change',paintCharts);
-$('#cCVD').addEventListener('change',paintCharts);
-$('#cReveal').addEventListener('click',()=>{
-  const s=chartsState; if(!s.meta) return;
-  s.revealed=true; paintCharts();
-  const m=s.meta;
-  const extra={
-    spring:'The sweep below support ran resting sell stops, then price reclaimed the level. Everyone short into the break is now offside.',
-    upthrust:'The poke above resistance filled buy stops and buy-stop-limits, then failed back inside. Longs bought the high.',
-    absorption:'Volume climbed while price stood still at the level. Effort without result: somebody large was taking the whole flow, and price turned once the aggressors ran out.',
-    initiative:'The break came with expanding volume and expanding bodies. Nobody defended the level, so price left value and stayed gone.',
-    fade:'The break came on thin volume with no follow-through, price stalled, and the move reverted through the level. Responsive selling, not initiative buying.'
-  }[m.pattern];
-  $('#cVerdict').className='verdict '+(PATTERNS[m.pattern].bias==='long'?'win':'neutral');
-  $('#cVerdict').innerHTML='<b>'+m.label+'</b><br>'+extra+'<br><span style="color:var(--blue)">CVD read: '+m.cvdRead+'.</span>';
-});
-$('#p3rot').addEventListener('input',e=>{p3rot=+e.target.value;draw3D($('#profile3d'),chartsState.bars,p3rot,p3tilt)});
-$('#p3tilt').addEventListener('input',e=>{p3tilt=+e.target.value;draw3D($('#profile3d'),chartsState.bars,p3rot,p3tilt)});
-$('#p3spin').addEventListener('click',()=>{
-  if(p3spinTimer){clearInterval(p3spinTimer);p3spinTimer=null;$('#p3spin').textContent='Spin';return}
-  $('#p3spin').textContent='Stop';
-  let d=1;
-  p3spinTimer=setInterval(()=>{
-    p3rot+=d; if(p3rot>44||p3rot<-44)d=-d;
-    $('#p3rot').value=p3rot;
-    draw3D($('#profile3d'),chartsState.bars,p3rot,p3tilt);
-  },60);
-});
-
-/* ============================================================
-   7. DRILL
-   ============================================================ */
-const LS={get:(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},
-          set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-
-const drill={streak:0,best:LS.get('tra_best',0),correct:0,total:0,level:1,
-             active:false,timer:null,left:0,limit:14,queue:null,queueIdx:0};
-$('#dBest').textContent=drill.best; $('#homeBest').textContent=drill.best;
-
-function drillLevelFrom(streak){return Math.min(4,1+Math.floor(streak/3))}
-function drillOptionCount(l){return [2,3,3,4,4][l]||4}
-
-function weightedPattern(){
-  const miss=LS.get('tra_miss',{});
-  const weights=PKEYS.map(k=>1+(miss[k]||0)*1.4);
-  const tot=weights.reduce((a,b)=>a+b,0);
-  let r=rnd()*tot;
-  for(let i=0;i<PKEYS.length;i++){ r-=weights[i]; if(r<=0) return PKEYS[i]; }
-  return PKEYS[0];
-}
-function updateWeak(){
-  const miss=LS.get('tra_miss',{});
-  const top=Object.entries(miss).sort((a,b)=>b[1]-a[1])[0];
-  $('#dWeak').textContent = top && top[1]>1 ? 'weak spot: '+top[0] : '';
-}
-
-function newDrillRound(){
-  drill.level=drillLevelFrom(drill.streak);
-  $('#dLevel').textContent=drill.level;
-  let m;
-  if(drill.queue){
-    if(drill.queueIdx>=drill.queue.length){endDaily();return}
-    RNG=mulberry32(drill.queue[drill.queueIdx++]);
-    m=makeSeries('any',drill.level);
-  }else{
-    m=makeSeries(weightedPattern(),drill.level);   // what you keep missing comes back more often
-  }
-  drill.cur=m;
-  drawChart($('#chartDrill'), m.bars, {showProfile:true, level:null, vwap:vwapOf(m.bars)});
-  const opts=[m.pattern];
-  const rest=PKEYS.filter(k=>k!==m.pattern);
-  while(opts.length<drillOptionCount(drill.level)) opts.push(rest.splice(Math.floor(rnd()*rest.length),1)[0]);
-  for(let i=opts.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[opts[i],opts[j]]=[opts[j],opts[i]]}
-  const box=$('#dOpts'); box.innerHTML='';
-  opts.forEach((k,i)=>{
-    const b=document.createElement('button');
-    b.className='opt'; b.dataset.k=k;
-    b.innerHTML='<kbd>'+(i+1)+'</kbd> '+PATTERNS[k].label.split(' — ')[0];
-    b.addEventListener('click',()=>answerDrill(k));
-    box.appendChild(b);
-  });
-  drill.limit = [0,14,11,9,7][drill.level]||7;
-  drill.left=drill.limit; drill.active=true;
-  $('#dTimer').style.width='100%';
-  clearInterval(drill.timer);
-  drill.timer=setInterval(()=>{
-    drill.left-=0.1;
-    $('#dTimer').style.width=Math.max(0,drill.left/drill.limit*100)+'%';
-    if(drill.left<=0) answerDrill(null);
-  },100);
-  $('#dVerdict').className='verdict neutral';
-  $('#dVerdict').textContent='Name it before the bar empties.';
-}
-function answerDrill(k){
-  if(!drill.active) return;
-  drill.active=false; clearInterval(drill.timer);
-  const right=drill.cur.pattern;
-  drill.total++;
-  $$('#dOpts .opt').forEach(b=>{
-    if(b.dataset.k===right)b.classList.add('right');
-    else if(b.dataset.k===k)b.classList.add('wrong');
-  });
-  const v=$('#dVerdict');
-  if(k===right){
-    drill.correct++; drill.streak++;
-    if(drill.streak>drill.best){drill.best=drill.streak;LS.set('tra_best',drill.best);$('#homeBest').textContent=drill.best}
-    syncProgress();
-    v.className='verdict win';
-    v.innerHTML='Correct — <b>'+drill.cur.label+'</b>'+(drill.streak%3===0?' · difficulty up: less time, more choices.':'');
-  }else{
-    drill.streak=0;
-    const miss=LS.get('tra_miss',{}); miss[right]=(miss[right]||0)+1; LS.set('tra_miss',miss); updateWeak();
-    v.className='verdict loss';
-    v.innerHTML=(k?'No — ':'Out of time — ')+'that was <b>'+drill.cur.label+'</b>';
-  }
-  $('#dStreak').textContent=drill.streak; $('#dBest').textContent=drill.best;
-  $('#dCorrect').textContent=drill.correct; $('#dTotal').textContent=drill.total;
-  setTimeout(()=>{
-    if(!drill.active && document.getElementById('drill').classList.contains('active')) newDrillRound();
-  }, 1900);
-}
-function endDaily(){
-  drill.queue=null;
-  $('#dDailyTag').textContent='';
-  $('#dVerdict').className='verdict neutral';
-  $('#dVerdict').innerHTML='Daily drill finished: <b>'+drill.correct+' of '+drill.total+'</b>. Everyone gets the same five charts today.';
-}
-$('#dStart').addEventListener('click',()=>{drill.queue=null;$('#dDailyTag').textContent='';newDrillRound()});
-$('#dDaily').addEventListener('click',()=>{
-  const d=new Date(), seed=d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate();
-  const g=mulberry32(seed);
-  drill.queue=Array.from({length:5},()=>Math.floor(g()*1e9));
-  drill.queueIdx=0; drill.correct=0; drill.total=0; drill.streak=0;
-  $('#dDailyTag').textContent='daily set · '+d.toISOString().slice(0,10);
-  newDrillRound();
-});
-$('#dReset').addEventListener('click',()=>{
-  drill.streak=0;drill.best=0;drill.correct=0;drill.total=0;LS.set('tra_best',0);LS.set('tra_miss',{});updateWeak();syncProgress();
-  ['#dStreak','#dBest','#dCorrect','#dTotal'].forEach(s=>$(s).textContent='0');
-  $('#homeBest').textContent='0';
-});
-document.addEventListener('keydown',e=>{
-  if(!$('#drill').classList.contains('active')||!drill.active) return;
-  const n=parseInt(e.key,10);
-  if(n>=1&&n<=4){const b=$$('#dOpts .opt')[n-1]; if(b)answerDrill(b.dataset.k)}
-});
-
-/* ============================================================
-   8. TRADING DESK
-   ============================================================ */
-const START_EQ=25000, RISK=25, MAX_LOSS_R=-3;
-const deskState={bars:null,meta:null,trade:null,open:false,
-  eq:START_EQ, r:0, pnl:0, trades:0, wins:0, aside:0, curve:[START_EQ], log:[], locked:false};
-
-function fmt(n){return (n<0?'-$':'$')+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
-
-function nextSetup(){
-  if(deskState.locked) return;
-  const m=makeSeries('any',2);
-  // make sure enough bars remain to resolve
-  if(m.bars.length-m.decisionIdx<22) return nextSetup();
-  deskState.meta=m; deskState.bars=m.bars; deskState.open=true; deskState.trade=null;
-  const d=m.decisionIdx;
-  const recent=m.bars.slice(Math.max(0,d-14),d+1);
-  let hi=-Infinity,lo=Infinity; recent.forEach(b=>{hi=Math.max(hi,b.h);lo=Math.min(lo,b.l)});
-  const stopDist=Math.max(m.sigma*1.2,(hi-lo)*.38);
-  deskState.entry=m.bars[d].c; deskState.stopDist=stopDist;
-  deskState.shares=Math.max(1,Math.round(RISK/stopDist));
-  deskState.vwap=vwapOf(m.bars);
-  deskState.aboveVwap = deskState.entry>=deskState.vwap[d];
-  $('#kSym').textContent=m.sym;
-  $('#kLast').textContent=deskState.entry.toFixed(2);
-  $('#kStop').textContent=stopDist.toFixed(2);
-  $('#kShares').textContent=deskState.shares;
-  $('#kCtx').textContent=(deskState.aboveVwap?'above':'below')+' session VWAP';
-  $('#kCtx').className=deskState.aboveVwap?'up':'dn';
-  deskState.flow=makeFlow(m);
-  renderFlow(deskState.flow);
-  drawChart($('#chartDesk'), m.bars, {mask:d, showProfile:true, vwap:deskState.vwap});
-  $('#kGrade').classList.remove('on');
-  $('#kVerdict').className='verdict neutral';
-  $('#kVerdict').textContent='Long, short, or stand aside. Stop is '+stopDist.toFixed(2)+' away, target is twice that.';
-}
-function renderFlow(f){
-  const lad=$('#kLadder'); lad.innerHTML='';
-  const mx=Math.max(...f.bid,...f.ask);
-  for(let k=4;k>=0;k--){
-    const row=document.createElement('div'); row.className='l2row';
-    row.innerHTML=
-      '<div class="l2cell bidc"><div class="bar" style="width:'+(f.bid[k]/mx*100)+'%"></div><span>'+
-        f.bid[k].toLocaleString()+' '+(f.px-f.tick*(k+1)).toFixed(2)+'</span></div>'+
-      '<div class="l2cell askc"><div class="bar" style="width:'+(f.ask[k]/mx*100)+'%"></div><span>'+
-        (f.px+f.tick*(k+1)).toFixed(2)+' '+f.ask[k].toLocaleString()+'</span></div>';
-    lad.appendChild(row);
-  }
-  $('#kTape').innerHTML=f.prints.map(p=>
-    '<div class="tape-row '+(p.side==='B'?'buy':'sell')+(p.size>=1500?' big':'')+'">'+
-    '<span class="t">·</span><span>'+p.px.toFixed(2)+'</span><span>'+p.size.toLocaleString()+'</span></div>').join('');
-  $('#kFlowNote').textContent='';
-}
-
-function resolveTrade(dir){
-  if(!deskState.open||deskState.locked) return;
-  deskState.open=false;
-  const m=deskState.meta, d=m.decisionIdx, bars=m.bars;
-  const entry=deskState.entry, sd=deskState.stopDist;
-  if(dir===0){
-    deskState.aside++;
-    // what would have happened, for feedback only
-    const outL=simulateExit(bars,d,entry,sd,1);
-    const outS=simulateExit(bars,d,entry,sd,-1);
-    const best=Math.max(outL.r,outS.r);
-    drawChart($('#chartDesk'),bars,{showProfile:true,level:m.level,showLevel:true,vwap:deskState.vwap,marks:[{i:d,text:'you stood aside'}]});
-    $('#kFlowNote').textContent='Flow read: '+deskState.flow.note;
-    $('#kVerdict').className='verdict neutral';
-    $('#kVerdict').innerHTML='Stood aside. It was <b>'+m.label+'</b>. Long would have made '+outL.r.toFixed(2)+'R, short '+outS.r.toFixed(2)+'R. '+
-      (best<1?'Nothing missed — that is a good pass.':'Something was there, but passing a setup you could not read is never the mistake.');
-    pushLog({dir:'—',pat:m.pattern,r:0});
-    journalAdd({sym:m.sym,pat:m.pattern,dir:'PASS',r:0,failed:!!m.failed});
-    updateLedger();
-    return;
-  }
-  const out=simulateExit(bars,d,entry,sd,dir);
-  const pnl=out.r*RISK;
-  deskState.r+=out.r; deskState.pnl+=pnl; deskState.eq+=pnl; deskState.trades++;
-  if(out.r>0) deskState.wins++;
-  deskState.curve.push(deskState.eq);
-  const trade={entry,stop:dir>0?entry-sd:entry+sd,target:dir>0?entry+2*sd:entry-2*sd,at:d};
-  drawChart($('#chartDesk'),bars,{showProfile:true,trade,level:m.level,showLevel:true,vwap:deskState.vwap});
-  $('#kFlowNote').textContent='Flow read: '+deskState.flow.note+(m.failed?' The pattern was real and it still failed — that happens about a third of the time.':'');
-  const v=$('#kVerdict');
-  v.className='verdict '+(out.r>0?'win':(out.r<0?'loss':'neutral'));
-  v.innerHTML='<b>'+(dir>0?'Long':'Short')+' '+deskState.shares+' shares · '+out.r.toFixed(2)+'R · '+fmt(pnl)+'</b><br>'+
-    'It was '+m.label.toLowerCase()+'. '+out.why;
-  pushLog({dir:dir>0?'LONG':'SHORT',pat:m.pattern,r:out.r});
-  const aligned = (dir>0 && deskState.aboveVwap) || (dir<0 && !deskState.aboveVwap);
-  journalAdd({sym:m.sym,pat:m.pattern,dir:dir>0?'LONG':'SHORT',r:+out.r.toFixed(2),failed:!!m.failed,aligned});
-  syncProgress();
-  askGrade();
-  updateLedger();
-  if(deskState.r<=MAX_LOSS_R) lockDesk();
-}
-function simulateExit(bars,d,entry,sd,dir){
-  const stop=dir>0?entry-sd:entry+sd, tgt=dir>0?entry+2*sd:entry-2*sd;
-  for(let i=d+1;i<bars.length;i++){
-    const b=bars[i];
-    const hitStop = dir>0 ? b.l<=stop : b.h>=stop;
-    const hitTgt  = dir>0 ? b.h>=tgt  : b.l<=tgt;
-    if(hitStop&&hitTgt) return {r:-1,why:'Both levels traded in the same bar, so this is scored as a stop — which is what would happen to you in real life.'};
-    if(hitStop) return {r:-1,why:'Stop hit '+(i-d)+' bars later. Taken as planned, this is still a good trade.'};
-    if(hitTgt)  return {r:2,why:'Target hit '+(i-d)+' bars later at twice your risk.'};
-  }
-  const last=bars[bars.length-1].c;
-  const r=((dir>0?last-entry:entry-last)/sd);
-  return {r:Math.max(-1,Math.min(2,r)), why:'Neither level traded before the data ran out, so the position is marked to the last price.'};
-}
-function pushLog(t){
-  deskState.log.unshift(t);
-  $('#kLog').innerHTML=deskState.log.slice(0,40).map(x=>{
-    const cls=x.r>0?'r-pos':(x.r<0?'r-neg':'r-flat');
-    return '<div><b>'+x.dir+'</b> <span>'+x.pat+'</span><span class="'+cls+'">'+x.r.toFixed(2)+'R</span></div>';
-  }).join('');
-}
-function updateLedger(){
-  $('#kEquity').textContent=fmt(deskState.eq);
-  const pnlEl=$('#kPnl'); pnlEl.textContent=fmt(deskState.pnl);
-  pnlEl.className=deskState.pnl>0?'up':(deskState.pnl<0?'dn':'');
-  const rEl=$('#kR'); rEl.textContent=deskState.r.toFixed(2)+'R';
-  rEl.className=deskState.r>0?'up':(deskState.r<0?'dn':'');
-  $('#kTrades').textContent=deskState.trades;
-  $('#kWin').textContent=deskState.trades?Math.round(deskState.wins/deskState.trades*100)+'%':'—';
-  $('#kAside').textContent=deskState.aside;
-  drawEquity();
-}
-function drawEquity(){
-  const cv=$('#equityCanvas'); const {ctx,w,h}=fitCanvas(cv);
-  ctx.clearRect(0,0,w,h); ctx.fillStyle=C.bg; ctx.fillRect(0,0,w,h);
-  const c=deskState.curve; if(c.length<2){ctx.fillStyle=C.text;ctx.font='9px "IBM Plex Mono", monospace';ctx.fillText('equity curve appears after your first trade',8,h/2);return}
-  const lo=Math.min(...c,START_EQ-100), hi=Math.max(...c,START_EQ+100);
-  const X=i=>6+i/(c.length-1)*(w-12), Y=v=>6+(hi-v)/(hi-lo)*(h-12);
-  ctx.strokeStyle=C.grid;ctx.setLineDash([3,3]);ctx.beginPath();
-  ctx.moveTo(6,Y(START_EQ));ctx.lineTo(w-6,Y(START_EQ));ctx.stroke();ctx.setLineDash([]);
-  ctx.strokeStyle=deskState.eq>=START_EQ?C.up:C.dn;ctx.lineWidth=1.5;ctx.beginPath();
-  c.forEach((v,i)=>i?ctx.lineTo(X(i),Y(v)):ctx.moveTo(X(i),Y(v)));ctx.stroke();
-}
-function lockDesk(){
-  deskState.locked=true;
-  LS.set('tra_lockouts', LS.get('tra_lockouts',0)+1);
-  syncProgress();
-  const el=$('#deskLock'); el.style.display='block';
-  el.innerHTML='Down '+deskState.r.toFixed(2)+'R. The desk is closed for the session — this is the rule from Lesson 8, and the whole point is that you do not get to override it. Review the log, then start a new session when you have actually stopped wanting revenge.';
-  ['#kLong','#kShort','#kFlat','#kNext'].forEach(s=>$(s).disabled=true);
-}
-$('#kLong').addEventListener('click',()=>resolveTrade(1));
-$('#kShort').addEventListener('click',()=>resolveTrade(-1));
-$('#kFlat').addEventListener('click',()=>resolveTrade(0));
-$('#kNext').addEventListener('click',nextSetup);
-$('#kNewDay').addEventListener('click',()=>{
-  Object.assign(deskState,{eq:START_EQ,r:0,pnl:0,trades:0,wins:0,aside:0,curve:[START_EQ],log:[],locked:false,open:false});
-  $('#deskLock').style.display='none';
-  ['#kLong','#kShort','#kFlat','#kNext'].forEach(s=>$(s).disabled=false);
-  $('#kLog').innerHTML=''; updateLedger(); nextSetup();
-});
-document.addEventListener('keydown',e=>{
-  if(!$('#desk').classList.contains('active')) return;
-  const k=e.key.toLowerCase();
-  if(k==='b')resolveTrade(1); else if(k==='s')resolveTrade(-1);
-  else if(k==='a')resolveTrade(0); else if(k==='n')nextSetup();
-});
-updateLedger();
-
-/* ---- journal, kept on this device across sessions ---- */
-function journalAll(){return LS.get('tra_journal',[])}
-function journalAdd(rec){
-  const j=journalAll();
-  rec.ts=new Date().toISOString().slice(0,16).replace('T',' ');
-  rec.again=null;
-  j.push(rec); LS.set('tra_journal',j.slice(-400));
-  return j.length-1;
-}
-function askGrade(){ $('#kGrade').classList.add('on'); }
-function grade(again){
-  const j=journalAll();
-  for(let i=j.length-1;i>=0;i--){ if(j[i].dir!=='PASS'&&j[i].again==null){ j[i].again=again; break } }
-  LS.set('tra_journal',j);
-  $('#kGrade').classList.remove('on');
-  renderReport();
-}
-$('#gYes').addEventListener('click',()=>grade(true));
-$('#gNo').addEventListener('click',()=>grade(false));
-
-/* ---- report card ---- */
-function renderReport(){
-  const j=journalAll(), t=j.filter(x=>x.dir!=='PASS');
-  const n=t.length, totR=t.reduce((a,x)=>a+x.r,0), wins=t.filter(x=>x.r>0).length;
-  $('#sTrades').textContent=n;
-  $('#sExp').textContent=n?(totR/n).toFixed(2)+'R':'—';
-  $('#sWin').textContent=n?Math.round(wins/n*100)+'%':'—';
-  $('#sTotal').textContent=n?(totR>0?'+':'')+totR.toFixed(1)+'R':'—';
-  $('#sAside').textContent=j.filter(x=>x.dir==='PASS').length;
-
-  // rank, XP, badges — the platform-wide progress layer
-  const p=paintProgress();
-  $('#rankName2').textContent=p.rank; $('#rankXp2').textContent=p.xp;
-  if(p.nextMin!=null){
-    const span=p.nextMin-RANKS[p.rankIdx].min, into=p.xp-RANKS[p.rankIdx].min;
-    $('#rankBar2').style.width=Math.min(100,into/span*100)+'%';
-    $('#rankNextTxt2').textContent=(p.nextMin-p.xp)+' XP to '+RANKS[p.rankIdx+1].name;
-  }else{ $('#rankBar2').style.width='100%'; $('#rankNextTxt2').textContent='top rank reached'; }
-  $('#xpBreakdown').innerHTML='Lessons '+p.lessonsSet.size+'×45 · best streak bonus '+
-    (Math.min(p.best,25)*8)+' · desk R bonus '+(Math.max(0,Math.min(p.totalR,120))*4).toFixed(0)+
-    ' · quiz '+p.quizCorrect+'×9 · desk wins '+p.deskWins+'×3 · badges '+p.badges.length+'×25';
-  $('#badgeGrid').innerHTML = BADGES.map(b=>{
-    const on=p.badges.includes(b.id);
-    return '<div class="badge-card'+(on?' earned':'')+'"><span class="ic">'+b.ic+'</span><b>'+b.name+'</b><span>'+b.desc+'</span></div>';
-  }).join('');
-
-  // quant stats — Lesson 15's formulas, run on the real journal
-  const cs=ciStats(t.map(x=>x.r));
-  $('#quantRow').innerHTML = n<2 ?
-    '<div class="stat"><b>—</b><span>log at least 2 trades to see statistics here</span></div>' :
-    '<div class="stat"><b>'+cs.mean.toFixed(2)+'R</b><span>mean R (expectancy)</span></div>'+
-    '<div class="stat"><b>'+cs.sd.toFixed(2)+'</b><span>standard deviation of R</span></div>'+
-    '<div class="stat"><b>±'+(1.96*cs.se).toFixed(2)+'R</b><span>95% margin of error</span></div>'+
-    '<div class="stat"><b>['+cs.lower.toFixed(2)+', '+cs.upper.toFixed(2)+']</b><span>95% CI on true expectancy</span></div>';
-  const qv=$('#quantVerdict');
-  if(n<20) qv.textContent='n = '+n+'. Lesson 15: below roughly 80 trades a modest edge routinely fails to clear its own confidence interval. Keep logging before drawing conclusions.';
-  else if(cs.lower>0) qv.textContent='n = '+n+'. The interval clears zero — at this sample size your edge is starting to look statistically real, not just lucky.';
-  else if(cs.upper<0) qv.textContent='n = '+n+'. The interval sits entirely below zero — worth treating as a real signal to change something, not noise.';
-  else qv.textContent='n = '+n+'. The interval still contains zero, so this sample cannot yet distinguish your process from a coin flip either way.';
-
-  // curve
-  const cv=$('#reportCurve'); const {ctx,w,h}=fitCanvas(cv);
-  ctx.clearRect(0,0,w,h); ctx.fillStyle=C.bg; ctx.fillRect(0,0,w,h);
-  ctx.font='10px "IBM Plex Mono", monospace'; ctx.textBaseline='middle';
-  if(n<2){ctx.fillStyle=C.text;ctx.fillText('Your R curve across every session appears here once you have a couple of trades.',14,h/2);}
-  else{
-    const pts=[0]; t.forEach(x=>pts.push(pts[pts.length-1]+x.r));
-    const lo=Math.min(...pts,-1), hi=Math.max(...pts,1);
-    const X=i=>20+i/(pts.length-1)*(w-70), Y=v=>16+(hi-v)/(hi-lo)*(h-34);
-    ctx.strokeStyle=C.grid;ctx.setLineDash([3,3]);ctx.beginPath();
-    ctx.moveTo(20,Y(0));ctx.lineTo(w-50,Y(0));ctx.stroke();ctx.setLineDash([]);
-    ctx.fillStyle=C.text;ctx.textAlign='left';ctx.fillText('0R',w-44,Y(0));
-    ctx.strokeStyle=totR>=0?C.up:C.dn;ctx.lineWidth=1.8;ctx.beginPath();
-    pts.forEach((v,i)=>i?ctx.lineTo(X(i),Y(v)):ctx.moveTo(X(i),Y(v)));ctx.stroke();
-    ctx.fillStyle=C.text;ctx.fillText(totR.toFixed(1)+'R',w-46,Y(pts[pts.length-1]));
-  }
-
-  // process matrix
-  const graded=t.filter(x=>x.again!=null);
-  const box=(a,win)=>graded.filter(x=>x.again===a && (win?x.r>0:x.r<=0)).length;
-  $('#matrix').innerHTML=
-    '<div class="hd"></div><div class="hd">Made money</div><div class="hd">Lost money</div>'+
-    '<div class="hd">Would take again</div>'+
-    '<div class="cell ok"><b>'+box(true,true)+'</b><span>good process, paid</span></div>'+
-    '<div class="cell ok"><b>'+box(true,false)+'</b><span>good process, cost of business</span></div>'+
-    '<div class="hd">Would not take again</div>'+
-    '<div class="cell bad"><b>'+box(false,true)+'</b><span>rewarded for a mistake — the dangerous box</span></div>'+
-    '<div class="cell bad"><b>'+box(false,false)+'</b><span>actual errors, the ones to fix</span></div>';
-
-  // with vs against the day's bias (Lesson 7's VWAP filter, applied to real trades)
-  const graded2 = t.filter(x=>x.aligned!=null);
-  const withB = graded2.filter(x=>x.aligned), against = graded2.filter(x=>!x.aligned);
-  const avg = arr => arr.length ? (arr.reduce((a,x)=>a+x.r,0)/arr.length) : null;
-  const avgWith=avg(withB), avgAgainst=avg(against);
-  $('#biasWith').textContent = avgWith==null?'—':avgWith.toFixed(2)+'R avg · '+withB.length+' trades';
-  $('#biasAgainst').textContent = avgAgainst==null?'—':avgAgainst.toFixed(2)+'R avg · '+against.length+' trades';
-
-  // by pattern
-  const pats={};
-  t.forEach(x=>{const k=x.pat;pats[k]=pats[k]||{n:0,r:0,w:0};pats[k].n++;pats[k].r+=x.r;if(x.r>0)pats[k].w++});
-  let rows='<tr><th>Pattern</th><th>Trades</th><th>Win rate</th><th>Average R</th><th>Total R</th></tr>';
-  Object.entries(pats).sort((a,b)=>a[1].r/a[1].n-b[1].r/b[1].n).forEach(([k,v])=>{
-    rows+='<tr><td>'+k+'</td><td>'+v.n+'</td><td>'+Math.round(v.w/v.n*100)+'%</td><td>'+
-      (v.r/v.n).toFixed(2)+'</td><td>'+v.r.toFixed(1)+'</td></tr>';
-  });
-  $('#patTable').innerHTML=rows;
-
-  // leak
-  const miss=LS.get('tra_miss',{});
-  const worstPat=Object.entries(pats).filter(([,v])=>v.n>=4).sort((a,b)=>a[1].r/a[1].n-b[1].r/b[1].n)[0];
-  const worstId=Object.entries(miss).sort((a,b)=>b[1]-a[1])[0];
-  let leak=[];
-  if(n<10) leak.push('Ten trades is not a sample. Keep going before you conclude anything.');
-  if(worstPat) leak.push('Your weakest setup on the desk is '+worstPat[0]+', at '+(worstPat[1].r/worstPat[1].n).toFixed(2)+'R a trade. Either stop taking it or go back to Lesson '+({spring:10,upthrust:10,absorption:5,initiative:9,fade:9}[worstPat[0]])+'.');
-  if(worstId) leak.push('In the drill you misname '+worstId[0]+' more than anything else, so that is what the drill now shows you most.');
-  if(box(false,true)>0) leak.push('You have '+box(false,true)+' win(s) you would not take again. Those are the trades that quietly teach bad habits.');
-  if(avgWith!=null && avgAgainst!=null && withB.length>=4 && against.length>=4){
-    const gap=avgWith-avgAgainst;
-    if(gap>0.25) leak.push('Trading with the session\'s VWAP bias is paying you '+gap.toFixed(2)+'R more per trade than fighting it. Lesson 7 said to use VWAP as a filter — your own numbers now say the same thing.');
-    else if(gap< -0.25) leak.push('Oddly, trading against VWAP has outperformed trading with it here ('+(-gap).toFixed(2)+'R). With this few trades that is more likely noise than a real edge — do not build a rule on it yet.');
-  }
-  $('#leak').innerHTML=leak.join('<br>');
-
-  // journal text
-  $('#journalOut').value='time,symbol,pattern,direction,R,would_take_again,pattern_failed\n'+
-    j.slice().reverse().map(x=>[x.ts,x.sym,x.pat,x.dir,x.r,x.again==null?'':x.again,x.failed].join(',')).join('\n');
-}
-$('#jRefresh').addEventListener('click',renderReport);
-$('#jClear').addEventListener('click',()=>{
-  LS.set('tra_journal',[]); LS.set('tra_miss',{});
-  syncProgress();
-  $('#jMsg').textContent='Journal erased.'; renderReport(); updateWeak();
-});
-
-/* ============================================================
-   9. YOUR DATA — CSV import and bar-by-bar replay
-   ============================================================ */
-const real={bars:[],show:0,timer:null};
-function parseCSV(txt){
-  const rows=txt.trim().split(/\r?\n/).filter(r=>r.trim());
-  const out=[];
-  rows.forEach(r=>{
-    const f=r.split(/[,;\t]/).map(x=>x.trim().replace(/^"|"$/g,''));
-    if(f.length<5) return;
-    const nums=f.slice(1,6).map(Number);
-    if(nums.slice(0,4).some(isNaN)) return;         // header or junk row
-    const [o,h,l,c,v]=nums;
-    if(!(h>=l)) return;
-    out.push({o,h,l,c,v:isNaN(v)||!v?1:v, d:f[0]});
-  });
-  return out;
-}
-function paintReal(){
-  const slice=real.bars.slice(0,real.show);
-  drawChart($('#chartReal'), slice, {showProfile:true, profileOut:pr=>{
-    $('#rPoc').textContent=pr.pocPrice.toFixed(2);
-    $('#rVa').textContent=pr.vaLoPrice.toFixed(2)+' – '+pr.vaHiPrice.toFixed(2);
-  }});
-  $('#rCount').textContent=real.bars.length;
-  $('#rShow').textContent=real.show+(slice.length&&slice[slice.length-1].d?' · '+slice[slice.length-1].d:'');
-}
-$('#csvLoad').addEventListener('click',()=>{
-  const b=parseCSV($('#csvBox').value);
-  if(b.length<10){$('#csvMsg').textContent='Found '+b.length+' usable rows. Check the column order: date, open, high, low, close, volume.';return}
-  real.bars=b; real.show=Math.min(60,b.length);
-  $('#csvMsg').textContent='Loaded '+b.length+' bars.';
-  paintReal();
-});
-$('#csvDemo').addEventListener('click',()=>{
-  // a synthetic file in the exact shape a real download arrives in, so the tools can be tried immediately
-  const m=makeSeries('any',1); let d=new Date('2024-01-02');
-  const lines=['Date,Open,High,Low,Close,Volume'];
-  m.bars.forEach(b=>{
-    lines.push([d.toISOString().slice(0,10),b.o.toFixed(2),b.h.toFixed(2),b.l.toFixed(2),b.c.toFixed(2),
-      Math.round(b.v*1.2e6)].join(','));
-    d=new Date(d.getTime()+86400000*(d.getDay()===5?3:1));
-  });
-  $('#csvBox').value=lines.join('\n');
-  $('#csvMsg').textContent='Sample file pasted — this one is generated, not real. Press load bars.';
-});
-$('#rFwd').addEventListener('click',()=>{if(real.show<real.bars.length){real.show++;paintReal()}});
-$('#rBack').addEventListener('click',()=>{if(real.show>5){real.show--;paintReal()}});
-$('#rAll').addEventListener('click',()=>{real.show=real.bars.length;paintReal()});
-$('#rPlay').addEventListener('click',()=>{
-  if(real.timer){clearInterval(real.timer);real.timer=null;$('#rPlay').textContent='Play replay';return}
-  $('#rPlay').textContent='Stop replay';
-  real.timer=setInterval(()=>{
-    if(real.show>=real.bars.length){clearInterval(real.timer);real.timer=null;$('#rPlay').textContent='Play replay';return}
-    real.show++;paintReal();
-  },420);
-});
-</script>
-<script>
-"use strict";
-/* ============================================================
-   10. TAPE SIMULATOR
-   Frames: px = last price, b/a = ladder sizes top-down,
-   t = prints [size, 'B'|'S'], c = coach line
-   ============================================================ */
-const F=(px,b,a,t,c)=>({px,b,a,t,c});
-const SCEN={
-A:{sym:'ARCL',base:24.30,tick:0.01,
-  title:'Absorption at support, long',
-  frames:[
-    F(24.44,[900,1400,1100,800,700],[600,900,1200,900,800],[[300,'S'],[200,'S']],'Price is drifting down toward 24.30, the level that held twice this morning. Watch the bid there, not the price.'),
-    F(24.38,[1200,1800,1500,900,800],[400,700,1100,900,700],[[500,'S'],[400,'S'],[300,'S']],'Sellers are paying the spread. Red prints, price giving way. Nothing to do yet.'),
-    F(24.31,[4200,1600,1400,900,900],[300,600,900,800,700],[[600,'S'],[800,'S']],'A 4,200 bid has appeared at 24.30. Note it. Is it real, or does it vanish when tested? Lesson 6.'),
-    F(24.30,[4200,1700,1400,900,900],[500,700,900,800,700],[[900,'S'],[700,'S'],[600,'S']],'2,200 shares just hit that bid and it still shows 4,200. It is refilling. That is absorption, not a wall you can see through.'),
-    F(24.30,[4100,1700,1500,900,900],[600,800,900,800,700],[[1100,'S'],[800,'S']],'Another 1,900 sold into it. Price has not moved a tick. Effort without result — Lesson 10.'),
-    F(24.30,[4300,1800,1500,1000,900],[500,700,900,800,700],[[700,'S'],[400,'S']],'Sell prints are getting smaller. The aggressive sellers are running out of shares, not out of conviction.'),
-    F(24.31,[4300,1900,1600,1000,900],[400,600,800,800,700],[[300,'B'],[400,'B']],'First green prints. Buyers are now the ones paying the spread.'),
-    F(24.33,[3900,2100,1700,1100,900],[300,500,700,700,700],[[700,'B'],[600,'B'],[500,'B']],'The offer above is thin. This is the trigger: absorption held and demand has turned aggressive.'),
-    F(24.37,[3500,2200,1800,1200,1000],[200,400,600,700,700],[[900,'B'],[800,'B']],'Long here, stop under 24.28, just below where the absorption happened. Roughly 200 shares for $25 of risk.'),
-    F(24.43,[3200,2300,1900,1300,1100],[300,500,600,700,800],[[1100,'B'],[900,'B'],[600,'B']],'Offers are being lifted as fast as they refresh. Nothing is defending the upside.'),
-    F(24.49,[3000,2400,2000,1400,1200],[400,600,700,800,900],[[700,'B'],[500,'B']],'Two-to-one on risk is here. Take it, or trail behind the last consolidation. Do not invent a new plan now.'),
-    F(24.52,[2600,2200,1900,1400,1200],[700,900,1000,900,900],[[300,'B'],[400,'S']],'Prints are thinning and the offer is rebuilding. The easy part is over. Flat is a position.')
-  ]},
-B:{sym:'VNTX',base:61.20,tick:0.01,
-  title:'Supply breaks the bid, short',
-  frames:[
-    F(61.44,[1500,1800,1600,1200,1000],[900,1200,1400,1100,900],[[400,'B'],[300,'B']],'Price has been grinding up all morning but the last three pushes made smaller highs.'),
-    F(61.40,[1300,1700,1500,1200,1000],[1400,1600,1500,1200,1000],[[500,'S'],[300,'S']],'The offer is stacking. Size above is building faster than size below.'),
-    F(61.34,[1000,1400,1300,1100,900],[1900,1800,1600,1300,1100],[[800,'S'],[600,'S']],'Bid at 61.30 is 1,000 and shrinking. That is the level everyone can see.'),
-    F(61.31,[700,1200,1200,1000,900],[2100,1900,1700,1300,1100],[[900,'S'],[700,'S'],[500,'S']],'Watch the 61.30 bid deplete print by print. This is Lesson 4 in reverse.'),
-    F(61.30,[300,1100,1100,1000,900],[2200,2000,1700,1400,1100],[[1200,'S'],[800,'S']],'300 left. No refill. Nobody is defending it.'),
-    F(61.28,[900,1000,1000,900,800],[2400,2100,1800,1400,1200],[[1500,'S'],[1100,'S'],[900,'S']],'Gone. Short on the break with the stop above 61.36, above the last swing and the stacked offers.'),
-    F(61.22,[800,900,900,800,800],[2500,2200,1900,1500,1200],[[1300,'S'],[1000,'S']],'Sellers keep hitting the bid into a falling market. Supply is initiative, not responsive.'),
-    F(61.15,[700,800,900,800,700],[2400,2200,1900,1500,1300],[[1100,'S'],[900,'S'],[700,'S']],'Each bid level is being taken without a fight. Nothing here asks you to do anything.'),
-    F(61.08,[900,900,1000,900,800],[2000,1900,1700,1400,1200],[[800,'S'],[500,'B']],'First meaningful green print. Prints are shrinking. Cover most of it.'),
-    F(61.04,[1400,1300,1200,1000,900],[1500,1500,1400,1200,1100],[[600,'B'],[500,'B']],'Bids are rebuilding under price. Two-to-one has paid. Be done.'),
-    F(61.09,[1600,1500,1300,1100,1000],[1300,1300,1300,1200,1100],[[700,'B'],[600,'B']],'The bounce you are now watching is the one that punishes people who got greedy.')
-  ]},
-C:{sym:'KRDO',base:8.60,tick:0.01,
-  title:'Spoofed wall, no trade',
-  frames:[
-    F(8.62,[2000,2400,2100,1800,1500],[1800,2000,1900,1700,1500],[[400,'B'],[300,'S']],'Balanced book, balanced tape. Nothing is happening, which is most of the trading day.'),
-    F(8.63,[2100,2300,2000,1800,1500],[38000,2000,1900,1700,1500],[[300,'B']],'A 38,000 share offer just appeared whole at 8.64. It did not build. Note that.'),
-    F(8.63,[2200,2400,2000,1800,1500],[38000,2100,1900,1700,1500],[[200,'B'],[300,'S']],'The obvious read is a ceiling. The obvious read is what it is designed to produce.'),
-    F(8.62,[2600,2500,2100,1800,1600],[38000,2100,1900,1700,1500],[[500,'S'],[400,'S']],'People are selling because they can see the wall. Notice it has not traded a single share.'),
-    F(8.63,[2400,2400,2000,1800,1500],[38000,2000,1900,1700,1500],[[300,'B'],[200,'B']],'A real 38,000 offer would be getting hit constantly at this distance. It is not.'),
-    F(8.64,[2300,2300,2000,1700,1500],[900,2000,1900,1700,1500],[[600,'B'],[500,'B']],'Gone. The instant price arrived, the wall evaporated. It was never for sale.'),
-    F(8.67,[2200,2200,1900,1700,1500],[1100,1800,1800,1600,1400],[[800,'B'],[700,'B']],'Price is now running through where the ceiling supposedly was, and everyone short is covering.'),
-    F(8.69,[2100,2100,1900,1600,1400],[1400,1700,1700,1600,1400],[[500,'B'],[400,'S']],'Tempting to chase. You have no level, no stop, and no idea who is doing this.'),
-    F(8.66,[2000,2000,1900,1600,1400],[1700,1800,1800,1600,1500],[[600,'S'],[500,'S']],'And it is back. The whole move was noise around a fake.'),
-    F(8.64,[2100,2100,1900,1700,1500],[1800,1900,1800,1600,1500],[[300,'S'],[300,'B']],'The correct trade was no trade. Scoring yourself on process means this counts as a win.')
-  ]},
-D:{sym:'TOPQ',base:143.00,tick:0.01,
-  title:'Trend day initiative push, long',
-  frames:[
-    F(143.10,[1100,1300,1200,1000,900],[800,1000,1100,900,800],[[600,'B'],[400,'B']],'Opened above yesterday\'s value area and has not been back. Lesson 9 says stop looking for fades today.'),
-    F(143.28,[1200,1400,1200,1000,900],[600,900,1000,900,800],[[900,'B'],[700,'B'],[500,'B']],'Buyers keep lifting offers rather than waiting. That is initiative, not accumulation.'),
-    F(143.22,[1500,1600,1300,1100,900],[700,900,1000,900,800],[[400,'S'],[300,'S']],'First pullback. The question is how shallow it is and who shows up.'),
-    F(143.19,[2100,1800,1400,1100,1000],[600,800,1000,900,800],[[500,'S'],[300,'S']],'Bids are thickening into the dip. Sell prints are smaller than the buy prints were.'),
-    F(143.25,[2300,1900,1500,1200,1000],[500,700,900,800,800],[[700,'B'],[600,'B']],'Demand returns before the pullback even reaches the last consolidation. Buy, stop under 143.12.'),
-    F(143.41,[2200,2000,1600,1200,1000],[400,600,800,800,700],[[1100,'B'],[900,'B'],[800,'B']],'Offers are evaporating ahead of price. Low effort, high result — Lesson 10.'),
-    F(143.63,[2100,2000,1700,1300,1100],[300,500,700,700,700],[[1300,'B'],[1000,'B']],'Two-to-one is here early. On a trend day this is the moment to keep a runner rather than flatten.'),
-    F(143.58,[2000,1900,1700,1300,1100],[500,700,800,800,700],[[500,'S'],[400,'S']],'Shallow pause. On a rotation day you would be flat. Today the context says hold and trail.'),
-    F(143.86,[1900,1900,1700,1300,1100],[400,600,700,700,700],[[1200,'B'],[900,'B'],[700,'B']],'Trail behind each higher consolidation. Do not predict the top; let the tape take you out.'),
-    F(144.02,[1700,1800,1600,1300,1100],[900,1100,1200,1100,900],[[600,'B'],[700,'S']],'Offers rebuilding, buy prints shrinking. That is your trail getting hit. Good trade, correctly held.')
-  ]},
-E:{sym:'MRVA',base:37.50,tick:0.01,
-  title:'Multi-level liquidity sweep, both ways',
-  frames:[
-    F(37.62,[1400,1500,1400,1200,1000],[1300,1500,1400,1200,1000],[[400,'B'],[400,'S']],'Two obvious levels: 37.40 under the morning lows, 37.80 over the highs. Stops sit beyond both.'),
-    F(37.51,[1200,1400,1300,1100,1000],[1600,1600,1500,1200,1000],[[700,'S'],[500,'S']],'Drifting toward the lows. This is where the cheapest liquidity is parked — Lesson 11.'),
-    F(37.42,[800,1200,1200,1000,900],[1800,1700,1500,1300,1100],[[900,'S'],[800,'S']],'Bid thinning at 37.40. It looks exactly like a breakdown about to happen.'),
-    F(37.36,[600,1000,1100,1000,900],[2000,1800,1600,1300,1100],[[1800,'S'],[1400,'S'],[1100,'S']],'Through it, on the biggest prints of the day. Stops are being filled. Do not short this.'),
-    F(37.38,[1900,1500,1300,1100,1000],[1200,1400,1400,1200,1000],[[1500,'B'],[900,'B']],'Immediate green size at the low. Somebody was waiting down here for exactly that flush.'),
-    F(37.47,[2200,1800,1500,1200,1000],[800,1100,1200,1100,900],[[1200,'B'],[1000,'B'],[800,'B']],'Reclaimed the level within three prints. That is a spring. Long, stop under 37.34.'),
-    F(37.63,[2300,1900,1600,1300,1100],[600,900,1000,1000,900],[[1300,'B'],[1100,'B']],'Now the mirror image sets up. Every stop that just got run is chasing price back toward 37.80.'),
-    F(37.78,[2100,1900,1600,1300,1100],[500,800,900,900,800],[[1400,'B'],[1200,'B'],[900,'B']],'Two-to-one on the long is here. Take it. What happens next is a different trade.'),
-    F(37.88,[1800,1700,1500,1200,1000],[2600,1900,1600,1300,1100],[[1600,'B'],[1300,'B']],'Above the highs on huge buy prints — and the offer above is getting heavier, not lighter.'),
-    F(37.79,[1400,1500,1400,1200,1000],[2900,2100,1700,1400,1200],[[900,'S'],[1100,'S']],'Rejected straight back inside within two bars. That is an upthrust: the same trick, other side.'),
-    F(37.66,[1100,1300,1300,1100,900],[2400,2000,1700,1400,1200],[[1300,'S'],[1000,'S'],[800,'S']],'Short the failure, stop above 37.92. Both sweeps paid; neither one was the obvious trade at the time.'),
-    F(37.52,[1000,1200,1200,1100,900],[1800,1700,1500,1300,1100],[[900,'S'],[700,'S']],'Back at value. Two trades, opposite directions, same lesson: the sweep is the setup, not the signal to join it.')
-  ]}
-};
-
-const SIM_CHECK={
-  A:{q:'The 4,200 bid got hit for roughly 2,000 shares combined and still showed 4,200. What does that tell you?',
-     a:['Someone big is defending this price','The bid is about to break down','It is a spoof — ignore it','Volume this heavy means avoid the stock'],c:0,
-     e:'Size that trades and refills at the same price is absorption, not a warning sign. That is what let you lean long into strength, not against it.'},
-  B:{q:'Bid size at 61.30 shrank from roughly 1,000 to nothing with no refill. That is:',
-     a:['A spoof forming','Real supply — the level is genuinely gone','A reason to buy the dip','Not meaningful on its own'],c:1,
-     e:'Depletion without refill, on a level everyone can see, is the actual breakdown trigger from Lesson 4 — not the candle that closes below it later.'},
-  C:{q:'The 38,000 share offer never traded a single share and vanished as price approached. The right response was:',
-     a:['Sell into the wall before it disappears','Buy in anticipation of a squeeze once it clears','Do nothing — it never confirmed anything','Add to a short because the level held once'],c:2,
-     e:'A wall that never trades and evaporates on approach is a spoof by definition. It gave you nothing to act on, and passing on it was the correct trade.'},
-  D:{q:'Price pulled back to a shallow dip on shrinking sell prints, then resumed, on a day trading well outside yesterday\'s value. The correct read was:',
-     a:['Fade the pullback short','Treat it as a fresh initiative long and hold with a trail','Exit everything the instant it dipped','Wait for a much deeper pullback that never came'],c:1,
-     e:'Lesson 9: on a trend day you give initiative moves room and trail behind consolidations rather than fading every dip back toward value.'},
-  E:{q:'Both the low sweep and the high sweep reversed hard on the session\'s heaviest volume. The lesson is:',
-     a:['Always join the direction of a sweep immediately','The sweep is the setup — wait for flow to confirm before fading it','Volume tells you nothing at the extremes','Only ever trade the first sweep of the day'],c:1,
-     e:'Both sweeps here were traps for whoever joined the breakout. The tradeable move was the failure back through the level, confirmed by the tape, not the sweep itself.'}
-};
-function showSimCheck(key){
-  const item=SIM_CHECK[key]; const box=$('#simCheckOpts'), panel=$('#simCheck');
-  panel.style.display='block';
-  $('#simCheckQ').textContent=item.q;
-  $('#simCheckVerdict').style.display='none';
-  box.innerHTML='';
-  item.a.forEach((txt,ai)=>{
-    const b=document.createElement('button'); b.className='opt'; b.textContent=txt;
-    b.addEventListener('click',()=>{
-      if(box.dataset.done) return; box.dataset.done='1';
-      Array.from(box.children).forEach((bb,bi)=>bb.classList.add(bi===item.c?'right':(bi===ai?'wrong':'')));
-      const v=$('#simCheckVerdict');
-      v.style.display='block'; v.className='verdict '+(ai===item.c?'win':'loss');
-      v.textContent=(ai===item.c?'Correct. ':'Not quite. ')+item.e;
-    });
-    box.appendChild(b);
-  });
-  box.removeAttribute('data-done');
-}
-function hideSimCheck(){ $('#simCheck').style.display='none'; }
-
-const sim={key:'A',i:0,timer:null,prices:[]};
-function simRender(){
-  const sc=SCEN[sim.key], f=sc.frames[Math.min(sim.i,sc.frames.length-1)];
-  const tick=sc.tick;
-  const lad=$('#l2Panel'); lad.innerHTML='';
-  const maxB=Math.max(...f.b), maxA=Math.max(...f.a), mx=Math.max(maxB,maxA);
-  for(let k=4;k>=0;k--){
-    const bp=(f.px-tick*(k+1)), ap=(f.px+tick*(k+1));
-    const row=document.createElement('div'); row.className='l2row';
-    row.innerHTML=
-      '<div class="l2cell bidc"><div class="bar" style="width:'+(f.b[k]/mx*100)+'%"></div>'+
-        '<span>'+f.b[k].toLocaleString()+' &nbsp; '+bp.toFixed(2)+'</span></div>'+
-      '<div class="l2cell askc"><div class="bar" style="width:'+(f.a[k]/mx*100)+'%"></div>'+
-        '<span>'+ap.toFixed(2)+' &nbsp; '+f.a[k].toLocaleString()+'</span></div>';
-    lad.appendChild(row);
-  }
-  const tp=$('#tapePanel');
-  f.t.forEach(([size,side])=>{
-    const d=document.createElement('div');
-    d.className='tape-row '+(side==='B'?'buy':'sell')+(size>=1000?' big':'');
-    const now=new Date();
-    d.innerHTML='<span class="t">'+now.toTimeString().slice(0,8)+'</span>'+
-      '<span>'+f.px.toFixed(2)+'</span><span>'+size.toLocaleString()+'</span>';
-    tp.prepend(d);
-  });
-  while(tp.children.length>60) tp.removeChild(tp.lastChild);
-  const buy=f.t.filter(x=>x[1]==='B').reduce((a,x)=>a+x[0],0);
-  const sell=f.t.filter(x=>x[1]==='S').reduce((a,x)=>a+x[0],0);
-  const tot=buy+sell||1;
-  $('#pBuy').style.width=(buy/tot*100)+'%';
-  $('#pSell').style.width=(sell/tot*100)+'%';
-  $('#coachBox').textContent=f.c;
-  sim.prices=sc.frames.slice(0,sim.i+1).map(x=>x.px);
-  simDraw();
-}
-function buildSimBars(sc){
-  // one candle per frame: open is the prior close, wick size scales with
-  // that frame's traded size, so a candle's range reflects real aggression
-  const bars=[]; let prevClose=sc.frames[0].px;
-  sc.frames.forEach((f,i)=>{
-    const o = i===0 ? f.px : prevClose, c = f.px;
-    const sizeSum = f.t.reduce((a,x)=>a+x[0],0);
-    const wick = sc.tick * Math.min(3.2, Math.max(0.6, sizeSum/900));
-    bars.push({o, c, h:Math.max(o,c)+wick, l:Math.min(o,c)-wick});
-    prevClose=c;
-  });
-  return bars;
-}
-function simDraw(){
-  const cv=$('#simChart'); const {ctx,w,h}=fitCanvas(cv);
-  ctx.clearRect(0,0,w,h); ctx.fillStyle=C.bg; ctx.fillRect(0,0,w,h);
-  const sc=SCEN[sim.key], bars=buildSimBars(sc), N=bars.length;
-  let lo=Infinity,hi=-Infinity; bars.forEach(b=>{lo=Math.min(lo,b.l);hi=Math.max(hi,b.h)});
-  const pad=(hi-lo)*.08||sc.tick; lo-=pad; hi+=pad;
-  const padL=18,padR=54,padT=16,padB=22,plotW=w-padL-padR,plotH=h-padT-padB;
-  const cw=plotW/N, X=i=>padL+i*cw+cw/2, Y=p=>padT+(hi-p)/(hi-lo)*plotH;
-  ctx.font='10px "IBM Plex Mono", monospace'; ctx.textBaseline='middle';
-  for(let k=0;k<=3;k++){
-    const y=padT+plotH*k/3, p=hi-(hi-lo)*k/3;
-    ctx.strokeStyle=C.grid;ctx.beginPath();ctx.moveTo(padL,y+.5);ctx.lineTo(padL+plotW,y+.5);ctx.stroke();
-    ctx.fillStyle=C.text;ctx.textAlign='left';ctx.fillText(p.toFixed(2), padL+plotW+6, y);
-  }
-  if(!sim.prices.length){ctx.fillStyle=C.text;ctx.textAlign='left';ctx.fillText(sc.sym+' — '+sc.title+'. Press play.',padL+2,h/2);return}
-  const shown=sim.prices.length, bw=Math.max(2,cw*.58);
-  for(let i=0;i<shown;i++){
-    const b=bars[i], x=X(i), col=b.c>=b.o?C.up:C.dn;
-    ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=1;
-    ctx.beginPath(); ctx.moveTo(Math.round(x)+.5,Y(b.h)); ctx.lineTo(Math.round(x)+.5,Y(b.l)); ctx.stroke();
-    const y0=Y(Math.max(b.o,b.c)), y1=Y(Math.min(b.o,b.c));
-    ctx.fillRect(x-bw/2, y0, bw, Math.max(1,y1-y0));
-  }
-  const last=shown-1, lb=bars[last];
-  ctx.strokeStyle=C.phos; ctx.lineWidth=1.3;
-  ctx.strokeRect(X(last)-bw/2-2, Y(Math.max(lb.o,lb.c))-2, bw+4, Math.max(1,Y(Math.min(lb.o,lb.c))-Y(Math.max(lb.o,lb.c)))+4);
-  ctx.fillStyle=C.text;ctx.textAlign='left';ctx.fillText(sc.sym,padL+2,10);
-}
-function simStep(){
-  const sc=SCEN[sim.key];
-  if(sim.i>=sc.frames.length){simPause();$('#coachBox').textContent='Scenario finished. Run it again at a faster speed, or move to the next one.';showSimCheck(sim.key);return}
-  simRender(); sim.i++;
-}
-function simPlay(){
-  if(sim.timer) return;
-  const sp=+$('#speedSelect').value;
-  simStep();
-  sim.timer=setInterval(simStep,sp);
-}
-function simPause(){clearInterval(sim.timer);sim.timer=null}
-function simReset(){simPause();sim.i=0;sim.prices=[];$('#tapePanel').innerHTML='';$('#l2Panel').innerHTML='';
-  $('#coachBox').textContent=SCEN[sim.key].sym+' — '+SCEN[sim.key].title+'. Press play.';simDraw();hideSimCheck()}
-$('#playBtn').addEventListener('click',simPlay);
-$('#pauseBtn').addEventListener('click',simPause);
-$('#resetBtn').addEventListener('click',simReset);
-$('#scenarioSelect').addEventListener('change',e=>{sim.key=e.target.value;simReset()});
-$('#speedSelect').addEventListener('change',()=>{if(sim.timer){simPause();simPlay()}});
-
-/* ============================================================
-   11. QUIZ
-   ============================================================ */
-const QUIZ=[
- {q:'A 5,000 share offer sits at 41.20. Price touches it, 3,000 shares trade, and the offer still shows 5,000. What are you looking at?',
-  a:['A spoof about to be pulled','Absorption by a large seller','A breakout trigger','A thin book'],c:1,
-  e:'Size that trades and then refills at the same price is absorption. A spoof would have vanished rather than printed 3,000 shares against it.'},
- {q:'Price sweeps below the morning low on the largest prints of the day, then reclaims the level within a minute on green prints. This is:',
-  a:['A breakdown to short','A spring','Absorption at resistance','A responsive fade'],c:1,
-  e:'A break of support that fails immediately and reclaims is a spring: sell stops got filled, and the sellers are now trapped.'},
- {q:'In auction terms, price leaves the value area and keeps going without returning. That is:',
-  a:['Responsive trading','Initiative trading','Rotation','Balance'],c:1,
-  e:'Initiative activity moves away from value and stays away. Responsive activity gets dragged back in.'},
- {q:'Why do spreads widen when a dealer suspects informed flow?',
-  a:['Exchange rules require it','It compensates for adverse selection','To attract more volume','Volatility bands force it'],c:1,
-  e:'The spread prices the risk that the next order knows something the dealer does not. More perceived informed flow, wider spread.'},
- {q:'Heavy volume with almost no price movement is best described as:',
-  a:['Low effort, high result','High effort, low result','A liquidity vacuum','A fair value gap'],c:1,
-  e:'Effort is volume, result is price change. Big effort with no result means someone is absorbing it.'},
- {q:'You risked $25, followed your plan exactly, and lost. Lesson 12 grades this as:',
-  a:['A bad trade','A good trade','Neutral','Depends on the next trade'],c:1,
-  e:'Process defines a good trade. Losses taken as planned are the cost of doing business; only broken process is a mistake.'},
- {q:'Your stop distance is 8 cents and you risk $25. Roughly how many shares?',
-  a:['80','200','310','625'],c:2,
-  e:'$25 divided by $0.08 is about 310 shares. Size always comes out of the stop, never out of how sure you feel.'},
- {q:'A huge offer appears whole, never trades a share, and disappears the moment price arrives. It was:',
-  a:['Absorption','A spoof','An iceberg order','A real wall that got lifted'],c:1,
-  e:'Instant appearance, no executions, and evaporation on approach is the classic spoof signature.'},
- {q:'Why do stops cluster just beyond obvious swing highs and lows?',
-  a:['Brokers place them there','Everyone reads the same chart','Exchange rules','Algorithms require round numbers'],c:1,
-  e:'Shared charts produce shared levels, which produce concentrated resting orders — the cheapest liquidity available to anyone needing size.'},
- {q:'A level breaks on thin volume, stalls for several bars, then price returns back through the level. This is:',
-  a:['Initiative','A responsive fade','Absorption','A spring'],c:1,
-  e:'A break without effort behind it that reverts into the range is responsive behaviour: the market rejected the new price as unfair.'},
- {q:'In scenario E, price sweeps the lows and reclaims, then later sweeps the highs and rejects. The lesson is:',
-  a:['Always fade sweeps','The sweep is the setup, not the signal to join','Trend days never reverse','Volume is irrelevant at extremes'],c:1,
-  e:'Both sweeps traded in the opposite direction to the break. Joining a sweep is joining the trapped side.'},
- {q:'You are down three R for the day. Lesson 8 says:',
-  a:['Halve your size and continue','Stop trading for the day','Take one more only on an A+ setup','Switch to a different symbol'],c:1,
-  e:'The daily stop is the one rule with no discretion in it, which is exactly why the trading desk in this site enforces it for you.'},
- {q:'Price makes a new low, but Cumulative Volume Delta holds steady or ticks up instead of confirming. This is:',
-  a:['Classic bearish divergence','Classic bullish divergence','Absorption-based divergence','No divergence at all'],c:1,
-  e:'Price extending to a new low without CVD confirming it is the definition of classic bullish divergence — the delta-based version of the spring you already know.'},
- {q:'An iceberg order and absorption are:',
-  a:['Unrelated concepts','The same order type, seen from two different tools','An iceberg is the mechanism; absorption is what it looks like on the tape','Absorption always requires several iceberg orders at once'],c:2,
-  e:'An iceberg hides its true size and refreshes as it fills. Absorption is the visible symptom of that order sitting on the tape — the mechanism and its symptom, not two separate things.'},
- {q:'Which market gives the cleanest order-flow read, and why?',
-  a:['US equities, because they are the most liquid','CME futures, because the book is centralized with no dark-pool fragmentation','Spot forex, because volume is highest','Crypto, because it trades 24/7'],c:1,
-  e:'Futures trade on one centralized exchange book. Equities fragment across roughly 16 venues plus delayed dark-pool prints, forex has no single tape at all, and crypto tapes are venue-specific.'}
-];
-let qScore=0,qAsked=0;
-(function buildQuiz(){
-  const box=$('#quizBox');
-  QUIZ.forEach((item,qi)=>{
-    const d=document.createElement('div'); d.className='q';
-    d.innerHTML='<p class="stem">'+(qi+1)+'. '+item.q+'</p>';
-    item.a.forEach((txt,ai)=>{
-      const b=document.createElement('button'); b.className='btn'; b.style.width='100%'; b.textContent=txt;
-      b.addEventListener('click',()=>{
-        if(d.classList.contains('done')) return;
-        d.classList.add('done'); qAsked++;
-        Array.from(d.querySelectorAll('button')).forEach((bb,bi)=>{
-          if(bi===item.c) bb.style.borderColor='#3FB950', bb.style.color='#3FB950';
-          else if(bi===ai) bb.style.borderColor='#E5534B', bb.style.color='#E5534B';
-        });
-        if(ai===item.c) qScore++;
-        $('#quizScore').textContent=qScore; $('#quizAsked').textContent=qAsked;
-        LS.set('tra_quiz_correct', LS.get('tra_quiz_correct',0) + (ai===item.c?1:0));
-        syncProgress();
-      });
-      d.appendChild(b);
-    });
-    const fb=document.createElement('div'); fb.className='fb'; fb.textContent=item.e; d.appendChild(fb);
-    box.appendChild(d);
-  });
-})();
-
-/* ============================================================
-   11b. LESSON PROGRESS
-   Explicit "mark complete" per lesson, plus prev/next navigation
-   injected into every lesson body — completion is a deliberate act,
-   not a side effect of glancing at a summary.
-   ============================================================ */
-(function(){
-  const items=$$('#lessons .lesson');
-  const titles=items.map(el=>el.querySelector('summary').textContent.replace(/\s+/g,' ').trim()
-    .replace(/^\d+\s*/,'').replace(/(Beginner|Intermediate|Advanced)[^F]*(Foundation|Advanced)\s*$/,'').trim());
-  const read=new Set(LS.get('tra_lessons_read',[]));
-
-  function paint(){
-    items.forEach((el,i)=>{
-      el.classList.toggle('read', read.has(i));
-      const btn=el.querySelector('.mark-complete');
-      if(btn){ btn.classList.toggle('done', read.has(i)); btn.textContent = read.has(i)?'✓ Completed':'Mark lesson complete'; }
-    });
-    $('#homeLessons').textContent=read.size+'/'+items.length;
-    $('#lessonsCount').textContent=read.size;
-    $('#lessonsBar').style.width=(read.size/items.length*100)+'%';
-  }
-  function openLesson(i){
-    items.forEach((el,j)=>{ if(j===i){el.open=true; el.scrollIntoView({behavior:'smooth',block:'start'})} });
-  }
-  window.openLesson = openLesson;
-  items.forEach((el,i)=>{
-    const body=el.querySelector('.body');
-
-    // Per-lesson video slot. Points at videos/lesson-NN.mp4 next to this file.
-    // Inside this claude.ai preview there is no such folder, so every one of
-    // these stays invisible (by design) — the exact same markup lights up the
-    // instant real files sit alongside index.html, e.g. once this is on GitHub
-    // Pages, with zero further edits needed.
-    const vwrap=document.createElement('div'); vwrap.className='lesson-video';
-    const vlabel=document.createElement('div'); vlabel.className='lv-label'; vlabel.textContent='Lesson video';
-    const vid=document.createElement('video'); vid.controls=true; vid.preload='metadata'; vid.playsInline=true;
-    const num=String(i+1).padStart(2,'0');
-    vid.src='videos/lesson-'+num+'.mp4';
-    let vsettled=false;
-    vid.addEventListener('loadedmetadata',()=>{ vsettled=true; vwrap.classList.add('ready'); },{once:true});
-    vid.addEventListener('error',()=>{ vsettled=true; vwrap.classList.remove('ready'); },{once:true});
-    setTimeout(()=>{ if(!vsettled) vwrap.classList.remove('ready'); },3000);
-    vwrap.appendChild(vlabel); vwrap.appendChild(vid);
-    body.insertBefore(vwrap, body.firstChild);
-
-    const foot=document.createElement('div'); foot.className='lesson-foot';
-    const mark=document.createElement('button'); mark.className='mark-complete'; mark.type='button';
-    mark.textContent='Mark lesson complete';
-    mark.addEventListener('click',()=>{
-      if(read.has(i)) read.delete(i); else read.add(i);
-      LS.set('tra_lessons_read',[...read]); paint(); syncProgress();
-    });
-    const nav=document.createElement('div'); nav.className='lesson-nav';
-    const prev=document.createElement('button'); prev.type='button'; prev.textContent='← Previous';
-    prev.disabled=i===0;
-    prev.addEventListener('click',()=>openLesson(i-1));
-    const next=document.createElement('button'); next.type='button';
-    next.textContent = i===items.length-1 ? 'First lesson →' : 'Next: '+titles[i+1];
-    next.addEventListener('click',()=>openLesson(i===items.length-1?0:i+1));
-    nav.appendChild(prev); nav.appendChild(next);
-    foot.appendChild(mark); foot.appendChild(nav);
-    body.appendChild(foot);
-  });
-  $('#lessonsReset').addEventListener('click',()=>{ read.clear(); LS.set('tra_lessons_read',[]); paint(); syncProgress(); });
-  paint();
-})();
-
-/* ============================================================
-   11c. XP, RANK AND BADGES
-   Pulled together from every part of the site: lessons read, drill
-   streak, quiz accuracy, desk trades. Recomputed on demand, never
-   stored as a derived number — the inputs are the source of truth.
-   ============================================================ */
-const RANKS=[
-  {name:'Observer',    min:0},
-  {name:'Apprentice',  min:150},
-  {name:'Reader',      min:400},
-  {name:'Operator',    min:750},
-  {name:'Quant',       min:1200},
-  {name:'Desk Head',   min:1800}
-];
-const BADGES=[
-  {id:'foundations',   ic:'📖', name:'Foundations cleared',   desc:'Read lessons 1 through 5',
-   test:p=>[0,1,2,3,4].every(i=>p.lessonsSet.has(i))},
-  {id:'curriculum',    ic:'🎓', name:'Full curriculum',        desc:'Read all 18 lessons',
-   test:p=>p.lessonsSet.size>=18},
-  {id:'streak10',      ic:'⚡',  name:'Ten in a row',           desc:'Best drill streak of 10 or more',
-   test:p=>p.best>=10},
-  {id:'sharpshooter',  ic:'🎯', name:'Sharpshooter',           desc:'80%+ quiz accuracy across at least 8 answers',
-   test:p=>p.quizCorrect>=8 && p.quizAccuracy>=0.8},
-  {id:'firstgreen',    ic:'📈', name:'First green trade',      desc:'Booked a winning trade on the desk',
-   test:p=>p.deskTrades>0 && p.deskWins>0},
-  {id:'discipline',    ic:'🛑', name:'Took the stop',          desc:'Hit the daily loss lock and started a fresh session',
-   test:p=>LS.get('tra_lockouts',0)>0},
-  {id:'flowreader',    ic:'🌊', name:'Order flow reader',      desc:'Read lessons 17 and 18 — footprint, CVD, and where it all applies',
-   test:p=>[16,17].every(i=>p.lessonsSet.has(i))},
-  {id:'significant',   ic:'📊', name:'Statistically significant', desc:'Desk edge confidence interval clears zero (n≥30)',
-   test:p=>p.deskTrades>=30 && p.ciLower>0},
-  {id:'quant',         ic:'∑',  name:'Quant',                  desc:'Read all three Quant Lab lessons',
-   test:p=>[13,14,15].every(i=>p.lessonsSet.has(i))}
-];
-
-function ciStats(rs){
-  const n=rs.length; if(n<2) return {mean:0,se:0,lower:0,upper:0,n};
-  const mean=rs.reduce((a,x)=>a+x,0)/n;
-  const variance=rs.reduce((a,x)=>a+(x-mean)*(x-mean),0)/(n-1);
-  const sd=Math.sqrt(variance), se=sd/Math.sqrt(n);
-  return {mean,sd,se,lower:mean-1.96*se,upper:mean+1.96*se,n};
-}
-function computeProgress(){
-  const lessonsSet=new Set(LS.get('tra_lessons_read',[]));
-  const best=LS.get('tra_best',0);
-  const quizCorrect=LS.get('tra_quiz_correct',0);
-  const j=LS.get('tra_journal',[]);
-  const trades=j.filter(x=>x.dir!=='PASS');
-  const deskTrades=trades.length, deskWins=trades.filter(x=>x.r>0).length;
-  const totalR=trades.reduce((a,x)=>a+x.r,0);
-  const cs=ciStats(trades.map(x=>x.r));
-  const quizAccuracy = qAsked ? qScore/qAsked : (quizCorrect?1:0);
-  const xp = lessonsSet.size*45
-    + Math.min(best,25)*8
-    + Math.max(0,Math.min(totalR,120))*4
-    + quizCorrect*9
-    + deskWins*3;
-  const p={lessonsSet,best,quizCorrect,quizAccuracy,deskTrades,deskWins,totalR,
-    ciLower:cs.lower,ciUpper:cs.upper,mean:cs.mean,se:cs.se,n:cs.n,xp};
-  const earned=BADGES.filter(b=>b.test(p));
-  p.badges=earned.map(b=>b.id);
-  const xpFinal = xp + earned.length*25;
-  let rankIdx=0;
-  for(let i=0;i<RANKS.length;i++) if(xpFinal>=RANKS[i].min) rankIdx=i;
-  p.xp=xpFinal; p.rankIdx=rankIdx; p.rank=RANKS[rankIdx].name;
-  p.nextMin = RANKS[rankIdx+1] ? RANKS[rankIdx+1].min : null;
-  return p;
-}
-function paintProgress(){
-  const p=computeProgress();
-  $('#rankName').textContent=p.rank;
-  $('#rankXp').textContent=p.xp;
-  $('#homeBest').textContent=p.best;
-  $('#homeLessons').textContent=p.lessonsSet.size+'/18';
-  $('#homeBadges').textContent=p.badges.length+'/'+BADGES.length;
-  if(p.nextMin!=null){
-    const span=p.nextMin-RANKS[p.rankIdx].min;
-    const into=p.xp-RANKS[p.rankIdx].min;
-    $('#rankBar').style.width=Math.min(100,into/span*100)+'%';
-    $('#rankNextTxt').textContent=(p.nextMin-p.xp)+' XP to '+RANKS[p.rankIdx+1].name;
-  }else{
-    $('#rankBar').style.width='100%';
-    $('#rankNextTxt').textContent='top rank reached';
-  }
-  return p;
-}
-let lbSyncTimer=null;
-function syncProgress(){
-  const p=paintProgress();
-  if(document.getElementById('report').classList.contains('active')) renderReport();
-  clearTimeout(lbSyncTimer);
-  lbSyncTimer=setTimeout(()=>writeLeaderboard(p),1500);
-}
-
-/* ============================================================
-   11d. LEADERBOARD — db + user capabilities
-   Entirely optional: every feature above works with none of this.
-   Falls back to a calm message when the viewer or the capability
-   is not available, and never blocks or throws on the rest of the page.
-   ============================================================ */
-let LB={db:null,user:null,myId:null,ready:false,tried:false};
-async function ensureLB(){
-  if(LB.tried) return LB;
-  LB.tried=true;
-  try{
-    if(window.claude && typeof window.claude.use==='function'){
-      const [db,user]=await Promise.all([
-        window.claude.use('db').catch(()=>null),
-        window.claude.use('user').catch(()=>null)
-      ]);
-      LB.db=db; LB.user=user;
-      if(user){ try{ LB.myId=await user.id(); }catch(e){ LB.myId=null; } }
-      LB.ready = !!(db && user && LB.myId);
-    }
-  }catch(e){ LB.ready=false; }
-  return LB;
-}
-async function writeLeaderboard(p){
-  try{
-    const lb=await ensureLB();
-    if(!lb.ready) return;
-    const trades=p.deskTrades, expectancy = trades? p.totalR/trades : null;
-    await lb.db.doc('leaderboard/'+lb.myId).set({
-      xp:p.xp, rank:p.rank, best:p.best, deskTrades:trades,
-      deskExpectancy: expectancy==null?null:+expectancy.toFixed(3),
-      deskTotalR:+p.totalR.toFixed(2), badges:p.badges.length, updatedAt:Date.now()
-    });
-  }catch(e){ /* silent — the rest of the page never depends on this succeeding */ }
-}
-let lbSubs=[];
-async function initLeaderboard(){
-  const status=$('#lbStatus'), board=$('#lbBoard');
-  const lb=await ensureLB();
-  if(!lb.ready){
-    status.style.display='block'; board.style.display='none';
-    status.textContent = window.claude
-      ? 'No shared leaderboard here — this needs to be viewed by a signed-in member of your organization.'
-      : 'This page is running standalone, so there is no shared leaderboard to show. Everything else on this page still works fully offline.';
-    return;
-  }
-  status.style.display='none'; board.style.display='block';
-  lbSubs.forEach(u=>{ try{u()}catch(e){} }); lbSubs=[];
-  const renderRows=async(target, docs, valueFn, tierFn)=>{
-    const ids=docs.map(d=>d.id);
-    let profiles={};
-    try{ profiles = await lb.user.profiles(ids); }catch(e){}
-    target.innerHTML = docs.length? '' : '<div class="lb-empty">No traders on this board yet — be the first.</div>';
-    docs.forEach((d,i)=>{
-      const data=d.data()||{};
-      const name=(profiles[d.id]&&profiles[d.id].name)||'Someone';
-      const isMe=d.id===lb.myId;
-      const row=document.createElement('div'); row.className='lb-row'+(isMe?' me':'');
-      const nameEl=document.createElement('div'); nameEl.className='lb-name'; nameEl.textContent=name+(isMe?' (you)':'');
-      row.innerHTML='<div class="lb-rank">'+(i+1)+'</div>';
-      row.appendChild(nameEl);
-      const valEl=document.createElement('div'); valEl.className='lb-xp'; valEl.textContent=valueFn(data);
-      const tierEl=document.createElement('div'); tierEl.className='lb-tier'; tierEl.textContent=tierFn(data);
-      row.appendChild(valEl); row.appendChild(tierEl);
-      target.appendChild(row);
-    });
-  };
-  try{
-    const qXp=lb.db.collection('leaderboard').orderBy('xp','desc').limit(50);
-    lbSubs.push(qXp.onSnapshot(snap=>{
-      renderRows($('#lbXp'), snap.docs, d=>(d.xp||0)+' XP', d=>d.rank||'');
-    }, ()=>{ $('#lbXp').innerHTML='<div class="lb-empty">Could not load the shared board right now.</div>'; }));
-
-    const qEdge=lb.db.collection('leaderboard').where('deskTrades','>=',20).orderBy('deskExpectancy','desc').limit(20);
-    lbSubs.push(qEdge.onSnapshot(snap=>{
-      renderRows($('#lbEdge'), snap.docs,
-        d=>(d.deskExpectancy>=0?'+':'')+(d.deskExpectancy||0).toFixed(2)+'R avg',
-        d=>d.deskTrades+' trades');
-    }, ()=>{ $('#lbEdge').innerHTML='<div class="lb-empty">Could not load the shared board right now.</div>'; }));
-  }catch(e){
-    status.style.display='block'; board.style.display='none';
-    status.textContent='Could not reach the shared leaderboard right now.';
-  }
-}
-$('#jumpReport').addEventListener('click',()=>document.querySelector('[data-tab="report"]').click());
-$$('#courseMapSvg .map-node').forEach(g=>{
-  g.addEventListener('click',()=>{
-    document.querySelector('[data-tab="lessons"]').click();
-    setTimeout(()=>{ if(window.openLesson) window.openLesson(+g.dataset.jump); }, 60);
-  });
-});
-
-/* ============================================================
-   11e. WALKTHROUGH — narrated autoplay episodes
-   Five patterns, five fixed seeds chosen so the outcome is a clean
-   textbook example (not one of the ~30% that fail), with captions
-   timed to specific, known bar counts for that exact chart. No
-   external video: the "video" is the chart building itself, in sync
-   with typewriter captions, entirely in-browser.
-   ============================================================ */
-const EPISODES=[
-  {id:'spring', seed:1, pattern:'spring', title:'The Spring', tag:'Wyckoff · Lesson 10',
-    beats:[
-      {bars:44, hold:3400, cap:"TOPQ has been grinding lower most of the session, heading toward $11.51 — a level the whole tape can see."},
-      {bars:52, hold:3200, cap:"Now it breaks. A cluster of red prints trades straight through $11.51, on some of the heaviest volume of the day."},
-      {bars:54, hold:3400, cap:"And it reclaims almost immediately. Whatever just sold that break is now trapped below a level that just proved it holds."},
-      {bars:78, hold:3600, cap:"Watch the buying that follows — every short from the breakdown eventually has to cover, and that covering is what's pushing this."},
-      {bars:102,hold:4600, cap:"That's a spring: a break built to run the stops beneath $11.51, not to start a downtrend. Lesson 10 has the full mechanics, and the checklist that tells a real one from a fake."}
-    ]},
-  {id:'upthrust', seed:5, pattern:'upthrust', title:'The Upthrust', tag:'Wyckoff · Lesson 10',
-    beats:[
-      {bars:42, hold:3400, cap:"HALO has pushed higher most of the session, closing in on $268.57 — the highs of the last few days."},
-      {bars:50, hold:3200, cap:"It breaks through. A run of green prints lifts the offer straight past the old high."},
-      {bars:52, hold:3400, cap:"And then it fails — back below $268.57 within a handful of bars, on size."},
-      {bars:78, hold:3600, cap:"Every buyer who chased that breakout is now underwater, and the only way out is to sell."},
-      {bars:104,hold:4600, cap:"This is the mirror image of a spring — an upthrust. The break existed to fill the buyers, not to start a trend. Lesson 10."}
-    ]},
-  {id:'absorption', seed:6, pattern:'absorption', title:'Absorption', tag:'Lessons 5 & 10',
-    beats:[
-      {bars:51, hold:3400, cap:"VNTX is drifting down toward $11.42 — nothing unusual yet, just a stock giving back some of the day's gains."},
-      {bars:63, hold:3800, cap:"Watch the volume here, not the price. Heavy size is trading right at $11.42, and price is barely moving at all."},
-      {bars:71, hold:3600, cap:"That's effort without result. Someone large is taking the other side of every seller at this exact price, and winning."},
-      {bars:84, hold:3600, cap:"The refill finally fails to reappear, and price turns. This is usually the tradeable moment — not while the absorption is happening, but right after it stops."},
-      {bars:98, hold:4600, cap:"Absorption at support, then a turn. Lesson 5 for the read, Lesson 10 for the effort-versus-result framing behind it."}
-    ]},
-  {id:'initiative', seed:11, pattern:'initiative', title:'Initiative Break', tag:'Auction theory · Lesson 9',
-    beats:[
-      {bars:36, hold:3400, cap:"MRVA has been consolidating under $191.57 most of the morning — tight range, nothing decisive."},
-      {bars:48, hold:3400, cap:"It pushes through, and unlike the spring you just watched, nothing is defending this level. The offer is thin and getting thinner."},
-      {bars:50, hold:3400, cap:"Confirmed — the break is on expanding volume and expanding range, the signature of real initiative, not a trap."},
-      {bars:69, hold:3600, cap:"Watch what doesn't happen: no deep pullback, no reclaim of the old level. It barely pauses before continuing."},
-      {bars:97, hold:4600, cap:"This is initiative trading — Lesson 9's term for a market that leaves value and doesn't look back. The trade is to hold it, not to fade it."}
-    ]},
-  {id:'fade', seed:16, pattern:'fade', title:'The Failed Break', tag:'Auction theory · Lesson 9',
-    beats:[
-      {bars:40, hold:3400, cap:"QTRN is holding just above $56.87 — a level that has capped every attempt lower today."},
-      {bars:52, hold:3400, cap:"It breaks below $56.87. At a glance this looks identical to the initiative break you just watched."},
-      {bars:54, hold:3400, cap:"But compare the volume — this break is thin. Nothing like the conviction behind a real move."},
-      {bars:62, hold:3400, cap:"It stalls. No follow-through, no acceleration — just a break sitting there with nothing behind it."},
-      {bars:102,hold:4600, cap:"And it reverts, back above $56.87. Lesson 9 calls this responsive activity — the market rejecting a price it disagreed with. Not every break deserves to be chased."}
-    ]}
-];
-const WALK={idx:0,playing:false,timer:null,beatIdx:0,beatMs:0,epMs:0,speed:1,autoNext:true,
-            bars:null,meta:null,vwap:null,lastReveal:1,lastCap:'',lastCapDone:true};
-
-function walkTotalMs(ep){ return ep.beats.reduce((a,b)=>a+b.hold,0); }
-function walkPaintFrame(revealCount, captionText, done){
-  WALK.lastReveal=revealCount; WALK.lastCap=captionText; WALK.lastCapDone=done;
-  drawChart($('#chartWalk'), WALK.bars, {
-    mask: Math.max(0, revealCount-1), showProfile:true, vwap:WALK.vwap, level:WALK.meta.level, showLevel:true
-  });
-  $('#walkCaption').innerHTML = captionText.replace(/</g,'&lt;') + (done?'':'<span class="cursor">▋</span>');
-}
-function renderWalkList(){
-  $('#walkList').innerHTML = EPISODES.map((ep,i)=>
-    '<button class="walk-item'+(i===WALK.idx?' active':'')+'" data-i="'+i+'"><b>'+(i+1)+'. '+ep.title+'</b><span>'+ep.tag+'</span></button>'
-  ).join('');
-  $$('#walkList .walk-item').forEach(b=>b.addEventListener('click',()=>walkLoad(+b.dataset.i, WALK.playing)));
-}
-function walkLoad(idx, autoplay){
-  clearInterval(WALK.timer); WALK.timer=null; WALK.playing=false;
-  WALK.idx=((idx%EPISODES.length)+EPISODES.length)%EPISODES.length;
-  const ep=EPISODES[WALK.idx];
-  RNG=mulberry32(ep.seed);
-  const m=makeSeries(ep.pattern,1);
-  WALK.bars=m.bars; WALK.meta=m; WALK.vwap=vwapOf(m.bars);
-  WALK.beatIdx=0; WALK.beatMs=0; WALK.epMs=0;
-  $('#walkPlay').textContent='▶ Play';
-  $('#walkTag').textContent=ep.tag;
-  $('#walkProgress').style.width='0%';
-  renderWalkList();
-  walkPaintFrame(1, '', false);
-  if(autoplay) walkPlay(); else walkPause();
-}
-function walkTick(){
-  const ep=EPISODES[WALK.idx];
-  const dtMs=80*WALK.speed;
-  WALK.beatMs+=dtMs; WALK.epMs+=dtMs;
-  let beat=ep.beats[WALK.beatIdx];
-  if(WALK.beatMs>=beat.hold){
-    if(WALK.beatIdx<ep.beats.length-1){
-      WALK.beatIdx++; WALK.beatMs=0; beat=ep.beats[WALK.beatIdx];
-    }else{
-      walkPaintFrame(beat.bars, beat.cap, true);
-      $('#walkProgress').style.width='100%';
-      clearInterval(WALK.timer); WALK.timer=null; WALK.playing=false;
-      $('#walkPlay').textContent='▶ Play';
-      if(WALK.autoNext) setTimeout(()=>{ if(!WALK.playing) walkLoad(WALK.idx+1, true); }, 1400);
-      return;
-    }
-  }
-  const prevTarget = WALK.beatIdx===0 ? 1 : ep.beats[WALK.beatIdx-1].bars;
-  const thisTarget = beat.bars;
-  const beatProgress = beat.hold ? WALK.beatMs/beat.hold : 1;
-  const revealCount=Math.round(prevTarget + (thisTarget-prevTarget)*Math.min(1, beatProgress/0.7));
-  const chars=Math.round(beat.cap.length*Math.min(1, beatProgress/0.55));
-  walkPaintFrame(revealCount, beat.cap.slice(0,chars), chars>=beat.cap.length);
-  $('#walkProgress').style.width=Math.min(100, WALK.epMs/walkTotalMs(ep)*100)+'%';
-}
-function walkPlay(){
-  if(WALK.timer||!WALK.bars) return;
-  WALK.playing=true; $('#walkPlay').textContent='⏸ Pause';
-  WALK.timer=setInterval(walkTick,80);
-}
-function walkPause(){
-  clearInterval(WALK.timer); WALK.timer=null; WALK.playing=false;
-  $('#walkPlay').textContent='▶ Play';
-}
-$('#walkPlay').addEventListener('click',()=>{ WALK.playing?walkPause():walkPlay(); });
-$('#walkRestart').addEventListener('click',()=>walkLoad(WALK.idx, true));
-$('#walkPrev').addEventListener('click',()=>walkLoad(WALK.idx-1, WALK.playing));
-$('#walkNext').addEventListener('click',()=>walkLoad(WALK.idx+1, WALK.playing));
-$('#walkSpeed').addEventListener('change',e=>{ WALK.speed=+e.target.value; });
-$('#walkAutoNext').addEventListener('change',e=>{ WALK.autoNext=e.target.checked; });
-$('#walkToTape').addEventListener('click',()=>document.querySelector('[data-tab="tape"]').click());
-document.addEventListener('keydown',e=>{
-  if(!document.getElementById('walkthrough').classList.contains('active')) return;
-  if(e.code==='Space'){ e.preventDefault(); WALK.playing?walkPause():walkPlay(); }
-  else if(e.key==='ArrowRight') walkLoad(WALK.idx+1, WALK.playing);
-  else if(e.key==='ArrowLeft') walkLoad(WALK.idx-1, WALK.playing);
-});
-
-/* ============================================================
-   12. INIT + RESIZE
-   ============================================================ */
-let rz;
-window.addEventListener('resize',()=>{
-  clearTimeout(rz);
-  rz=setTimeout(()=>{
-    if(chartsState.bars) paintCharts();
-    if(deskState.bars) drawChart($('#chartDesk'),deskState.bars,{mask:deskState.open?deskState.meta.decisionIdx:null,showProfile:true});
-    if(real.bars.length) paintReal();
-    drawEquity(); simDraw();
-    if(drill.cur) drawChart($('#chartDrill'),drill.cur.bars,{showProfile:true,vwap:vwapOf(drill.cur.bars)});
-    if(WALK.bars) walkPaintFrame(WALK.lastReveal, WALK.lastCap, WALK.lastCapDone);
-    if(document.getElementById('report').classList.contains('active')) renderReport();
-  },140);
-});
-genChart();
-simReset();
-updateWeak();
-renderReport();
-</script>
 </body>
 </html>
