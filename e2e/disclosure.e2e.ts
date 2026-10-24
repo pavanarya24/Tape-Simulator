@@ -38,3 +38,41 @@ test("the course warning does not claim charts the page no longer renders", asyn
   await expect(warn).not.toContainText("charts");
   await expect(page.locator("canvas")).toHaveCount(0);
 });
+
+test("the risk, data and privacy page states each claim it has to", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto("/legal.html");
+
+  const body = page.locator("main");
+  await expect(body).toContainText("Not financial advice");
+  await expect(body).toContainText("No broker connection");
+  await expect(body).toContainText("No live market data");
+
+  // Flow Lab ships recorded venue data, so the page must name it and say what
+  // it may not be used for — not just disclaim the synthetic terminal data.
+  const table = page.locator("table");
+  await expect(table).toContainText("Binance Spot BTCUSDT");
+  await expect(table).toContainText("Binance Historical aggTrades");
+  await expect(table).toContainText("Synthetic Practice Scenario");
+  // The licensed CME capture must not be advertised as part of the app, and the
+  // page must say so rather than leaving a reader to guess.
+  await expect(table).not.toContainText("Databento");
+  await expect(body).toContainText("not included in the application");
+  await expect(body).toContainText("not licensed to you for redistribution");
+
+  // The privacy claim is only honest because the app really has no backend.
+  await expect(body).toContainText("There is no server, no account, and no analytics");
+  await expect(body).toContainText("IndexedDB");
+  await expect(body).toContainText("Google Fonts");
+
+  // The storage inventory is a factual claim, so it is pinned to what the app
+  // really stores. The journal outlives the tab and the page has to say so, along
+  // with what a reload does not bring back.
+  await expect(body).toContainText("trade journal");
+  await expect(body).toContainText("notes you wrote on it");
+  await expect(body).toContainText("does not");
+  await expect(body).toContainText("replay position");
+
+  await expect(page.locator("footer a", { hasText: "Tape Lab" })).toBeVisible();
+  expect(errors).toEqual([]);
+});

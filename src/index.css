@@ -10,6 +10,9 @@
   --line-soft: #151a20;
   --text: #d8e0e8;
   --dim: #7c8894;
+  /* Non-text only (currently just the paused dot). At 2.7-3.1:1 this cannot
+     carry a text label, and no value between it and --dim clears the 4.5:1
+     AA floor on these panels, so text uses --dim instead. */
   --dimmer: #55606b;
   --accent: #e6a93c;
   --accent-dim: #6b4d16;
@@ -82,9 +85,28 @@ textarea {
 
 .app {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto 1fr auto;
   height: 100%;
   overflow: hidden;
+}
+/* Third grid row: the persistent disclosure line, and the narrow-screen note
+   the 1080px block reveals. .toast is position:fixed so it adds no row. */
+.app-footer {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 6px 14px 7px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--panel);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--dim);
+}
+.app-footer a {
+  color: var(--dim);
+  text-decoration: underline;
 }
 
 .topbar {
@@ -134,7 +156,7 @@ textarea {
 .brand-sub {
   font-family: var(--mono);
   font-size: 9px;
-  color: var(--dimmer);
+  color: var(--dim);
   letter-spacing: 0.12em;
 }
 
@@ -194,7 +216,7 @@ a.navbtn {
   font-family: var(--mono);
   font-size: 9px;
   letter-spacing: 0.11em;
-  color: var(--dimmer);
+  color: var(--dim);
   text-transform: uppercase;
 }
 .tb-value {
@@ -367,6 +389,12 @@ textarea:focus,
 button:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 0;
+}
+/* An accent ring on an accent-filled button is invisible (1:1), so primary
+   buttons take a ring in the text colour, offset clear of their own fill. */
+.btn.primary:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
 }
 textarea {
   background: #0a0d10;
@@ -623,7 +651,7 @@ textarea {
   font-size: 9px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--dimmer);
+  color: var(--dim);
   display: block;
 }
 .cell .v {
@@ -689,7 +717,7 @@ textarea {
 .empty {
   padding: 22px 14px;
   text-align: center;
-  color: var(--dimmer);
+  color: var(--dim);
   font-family: var(--mono);
   font-size: 11px;
 }
@@ -712,7 +740,7 @@ textarea {
   font-size: 9px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--dimmer);
+  color: var(--dim);
   display: block;
 }
 .stat .v {
@@ -919,7 +947,7 @@ textarea {
   font-size: 9.5px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--dimmer);
+  color: var(--dim);
 }
 .score-cell .v {
   font-family: var(--mono);
@@ -1006,6 +1034,45 @@ textarea {
   max-width: 460px;
 }
 
+/* First-run explainer. Fixed so it claims no grid row and cannot push the
+   terminal out of its 1fr track; the × dismisses it into localStorage. */
+.first-run {
+  position: fixed;
+  top: 62px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 55;
+  width: min(580px, calc(100vw - 28px));
+  padding: 13px 42px 14px 16px;
+  border: 1px solid var(--accent-dim);
+  border-left: 3px solid var(--accent);
+  border-radius: 3px;
+  background: var(--panel-3);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.55);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.first-run strong,
+.first-run a {
+  color: var(--accent);
+}
+.first-run-close {
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  padding: 2px 6px;
+  border: 0;
+  background: none;
+  color: var(--dim);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.first-run-close:hover {
+  color: var(--text);
+}
+
 .notice {
   border: 1px solid #533b12;
   background: #171207;
@@ -1077,6 +1144,11 @@ textarea {
     grid-template-columns: 84px 1fr;
   }
 }
+/* Sits in the .app footer next to the risk line; the 1080px block reveals it. */
+.desktop-only-note {
+  display: none;
+}
+
 @media (max-width: 1080px) {
   .workspace {
     grid-template-rows: 1fr 200px;
@@ -1084,8 +1156,14 @@ textarea {
   .cols {
     grid-template-columns: minmax(0, 1fr) 258px;
   }
+  /* The replay transport lives in .col.left, so below this width it is gone.
+     Rather than present a terminal nobody can drive, say so plainly. */
   .col.left {
     display: none;
+  }
+  .desktop-only-note {
+    display: inline;
+    color: var(--text);
   }
 }
 
@@ -2126,7 +2204,7 @@ textarea {
 
 /* one-line pointer added under the page h2 */
 .lede-flow-note {
-  color: var(--dimmer);
+  color: var(--dim);
   font-size: 11px;
   margin: -12px 0 14px;
 }

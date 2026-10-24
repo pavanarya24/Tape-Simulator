@@ -46,10 +46,27 @@ describe("no server surface, no network calls", () => {
     expect(offenders).toEqual([]);
   });
 
-  test("no API endpoints, URLs or hardcoded hosts exist in the application code", () => {
+  /**
+   * Hosts the client may *navigate* to. These are `href`s on anchors the reader
+   * clicks; the app never calls them, and no code path reads them. Adding a host
+   * means adding it here on purpose, in a diff someone has to read.
+   */
+  const NAVIGATION_ONLY_HOSTS = ["github.com"];
+
+  test("the client reaches no host except the navigation-only ones listed here", () => {
     const offenders: string[] = [];
     for (const { path, text } of sources) {
-      for (const m of text.matchAll(/https?:\/\/[^\s"'`)]+/g)) offenders.push(`${path}: ${m[0]}`);
+      for (const m of text.matchAll(/https?:\/\/([^\s"'`)/]+)([^\s"'`)]*)/g)) {
+        const host = m[1].toLowerCase();
+        const allowed = NAVIGATION_ONLY_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+        if (!allowed) offenders.push(`${path}: ${m[0]}`);
+        // An allowlisted host is only acceptable as a click-through link. If it
+        // ever appears on a line that is not an href, this is no longer a
+        // navigation and the allowlist must not cover it.
+        else if (!text.slice(0, m.index).split("\n").pop()!.includes("href")) {
+          offenders.push(`${path}: ${m[0]} (allowlisted host outside an href)`);
+        }
+      }
     }
     expect(offenders).toEqual([]);
   });

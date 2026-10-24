@@ -1,0 +1,46 @@
+Copyright (c) 2026 Pavan Arya. All rights reserved.
+
+Tape Lab and Tape Reading Academy
+=================================
+
+This repository is published publicly so that the work can be read, reviewed and
+learned from. Public availability on GitHub is not a licence.
+
+No permission is granted to copy, modify, merge, publish, distribute,
+sublicense, sell, or otherwise use this software or its contents, in whole or
+in part, for any purpose, without the prior written permission of the copyright
+holder. All rights are reserved.
+
+Specifically, and without limiting the above:
+
+1. You may read, clone and run this software locally for your own personal,
+   non-commercial education.
+
+2. You may not redistribute it, host it, publish it, or present it as your own
+   work, in source or built form.
+
+3. You may not use it, or any part of it, to build a competing product or a
+   commercial training or market-replay service.
+
+4. The market data recordings bundled with this software are included for
+   individual educational use only. They are not licensed to you for
+   redistribution, resale, or reconstruction of a historical market database.
+   The upstream terms of the venues and vendors named in `public/legal.html`
+   govern that data and take precedence.
+
+5. The names "Tape Lab" and "Tape Reading Academy" may not be used to endorse or
+   promote anything derived from this software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Nothing in this software is financial advice. It is an educational simulator
+with no broker connection and no live market data. See `public/legal.html`.
+
+A different licence — including a permissive one such as MIT — can be granted
+later by the copyright holder. This notice can be relaxed; it cannot be
+retroactively tightened, which is why it starts here.

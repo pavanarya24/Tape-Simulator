@@ -24,7 +24,9 @@ export function JournalPage({ state }: { state: AppState }) {
         <div className="card-head">
           <h3>Journal</h3>
           <div className="right btn-row">
-            <span className="badge">{trades.length} trades</span>
+            <span className="badge">
+              {trades.length} {trades.length === 1 ? "trade" : "trades"}
+            </span>
             <button
               className="btn sm"
               disabled={trades.length === 0}

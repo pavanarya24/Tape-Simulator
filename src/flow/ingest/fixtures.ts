@@ -9,12 +9,16 @@
  * - Always maps to strictly validated MarketProfiles.
  * - Honestly declares capture origin, date, venue, and microstructure capabilities.
  * - Distinguishes trade-only archives from Level-2 depth captures.
+ *
+ * The Databento CME NQ capture is deliberately NOT bundled. A `?raw` import inlines
+ * the bytes into the shipped bundle, and the bundle is served to every visitor, so
+ * bundling it would redistribute licensed CME data to the public. The adapter
+ * (`./databento`) and the on-disk fixture remain for local, non-served use.
  */
 
 import { BinanceAdapter } from "./binance";
-import { DatabentoAdapter } from "./databento";
 import { RealMarketDataFeed } from "./feed";
-import { CME_INSTRUMENTS, type MicrostructureCapabilities } from "./types";
+import type { MicrostructureCapabilities } from "./types";
 import {
   PROFILE_CME_NQ,
   PROFILE_BINANCE_BTCUSDT_SPOT,
@@ -23,14 +27,12 @@ import type { MarketProfile } from "../../market/profile";
 
 import binanceGenuineRaw from "../../../tests/fixtures/binance_btcusdt_genuine.jsonl?raw";
 import binanceGenuineMeta from "../../../tests/fixtures/binance_btcusdt_genuine.meta.json";
-import databentoGenuineRaw from "../../../tests/fixtures/databento_cme_nq.jsonl?raw";
 import binanceHistoricalSliceRaw from "../../../tests/fixtures/binance_btcusdt_spot_historical_slice.csv?raw";
 import binanceHistoricalSliceMeta from "../../../tests/fixtures/binance_btcusdt_spot_historical_slice.meta.json";
 
 export type FlowDataSourceId =
   | "synthetic"
   | "binance-genuine-spot"
-  | "databento-genuine-nq"
   | "binance-historical-trades";
 
 export interface FlowDataSourceMeta {
@@ -74,19 +76,6 @@ export const FLOW_DATA_SOURCES: readonly FlowDataSourceMeta[] = [
     profile: PROFILE_BINANCE_BTCUSDT_SPOT,
   },
   {
-    id: "databento-genuine-nq",
-    label: "Databento CME NQ (Genuine Capture)",
-    description: "Genuine CME Globex E-mini Nasdaq-100 MBP-1 market depth and trades",
-    venue: "CME Globex",
-    symbol: "NQ",
-    isRealData: true,
-    isTradeOnly: false,
-    targetProfileId: "CME:NQ",
-    capturedAt: "2024-05-24T14:10:00.000Z",
-    schemaDetails: "Databento MBP-1 schema (10-level book depth, nanosecond timestamps, order counts)",
-    profile: PROFILE_CME_NQ,
-  },
-  {
     id: "binance-historical-trades",
     label: "Binance Historical aggTrades (Trade-Only)",
     description: "Official Binance Vision historical aggTrades archive (trades only, no L2 depth)",
@@ -128,24 +117,6 @@ export function loadBinanceGenuineSpotFeed(): RealMarketDataFeed {
     capabilities,
     validationReport: report,
     profile: PROFILE_BINANCE_BTCUSDT_SPOT,
-  });
-}
-
-/**
- * Creates a verified RealMarketDataFeed from the genuine Databento CME NQ capture.
- */
-export function loadDatabentoGenuineNqFeed(): RealMarketDataFeed {
-  const adapter = new DatabentoAdapter();
-  const { events, report } = adapter.normalize(databentoGenuineRaw, {
-    instrument: CME_INSTRUMENTS.NQ,
-    strict: true,
-  });
-
-  return new RealMarketDataFeed(events, {
-    source: "Databento CME Globex Capture (NQ MBP-1)",
-    capabilities: adapter.capabilities,
-    validationReport: report,
-    profile: PROFILE_CME_NQ,
   });
 }
 

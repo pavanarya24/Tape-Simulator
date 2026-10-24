@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Risk, data &amp; privacy — Tape Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#080B10; --panel:#0E141C; --rule:#1E2833; --rule-soft:#161F29;
+  --text:#D7DEE7; --text-dim:#8B98A8; --phosphor:#F0A93B; --ask:#E5534B; --bid:#3FB950;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --serif:"Newsreader",Georgia,"Times New Roman",serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ink);color:var(--text);font-family:var(--serif);
+  font-size:17px;line-height:1.62;overflow-x:hidden}
+main{max-width:760px;margin:0 auto;padding:56px 22px 96px;position:relative;z-index:1}
+a{color:var(--phosphor);text-underline-offset:3px}
+h1,h2,h3{font-family:var(--mono);font-weight:600;letter-spacing:-0.01em;line-height:1.2}
+h1{font-size:1.65rem;margin:0 0 4px}
+h2{font-size:1.15rem;margin:38px 0 8px;padding-top:16px;border-top:1px solid var(--rule-soft)}
+h3{font-size:.95rem;margin:22px 0 6px;color:var(--phosphor)}
+p,li{color:var(--text)}
+.lede{color:var(--text-dim);font-size:.95rem;margin:0 0 8px}
+.callout{border-left:2px solid var(--phosphor);background:#12161c;padding:12px 16px;
+  margin:18px 0;font-size:.95rem}
+.callout.warn{border-left-color:var(--ask)}
+.callout strong{color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:.88rem}
+th,td{text-align:left;vertical-align:top;padding:9px 10px;border-bottom:1px solid var(--rule-soft)}
+th{font-family:var(--mono);font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--text-dim);font-weight:500}
+td.mono,.mono{font-family:var(--mono);font-size:.82rem}
+.dim{color:var(--text-dim)}
+footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--rule-soft);
+  font-family:var(--mono);font-size:.78rem;color:var(--text-dim)}
+</style>
+</head>
+<body>
+<main>
+
+<h1>Risk, data &amp; privacy</h1>
+<p class="lede">Plain statements about what Tape Lab is, where its numbers come from, and what
+happens to anything you type into it. Nothing here is a substitute for reading it once.</p>
+
+<div class="callout warn">
+  <strong>Not financial advice. Not a trading system. Not a track record.</strong>
+  Tape Lab is an educational simulator for practising the reading of price action. Most people
+  who day trade lose money. Nothing in this app is a recommendation, a signal, a prediction, or
+  a statement about any real market. Do not trade real money on the basis of anything you see here.
+</div>
+
+<h2>1. What Tape Lab is</h2>
+<p>A browser application that replays historical and generated market data bar by bar, lets you
+place <em>simulated</em> orders against it, and scores how you did. It runs entirely on your own
+machine, in your own browser tab.</p>
+<ul>
+  <li><strong>No broker connection.</strong> There is no brokerage integration anywhere in this
+      software. It cannot place a real order, and it never asks for an account, a key, or a password.</li>
+  <li><strong>No live market data.</strong> Every price you see is either a recording that has already
+      happened or data generated in your browser. No feed is subscribed to, and no live quote is fetched.</li>
+  <li><strong>Simulated fills.</strong> Orders are matched against a documented candle-based model with
+      an explicit intrabar-ambiguity rule. A simulated fill is not a fill. Real fills differ — in price,
+      in size, and in whether they happen at all.</li>
+</ul>
+<p class="dim">Slippage, commissions, partial fills, requotes, outages, exchange halts and the
+psychological weight of real money are all approximated or absent. Results that look achievable here
+are not evidence that they are achievable in a live account.</p>
+
+<h2>2. Where the data comes from</h2>
+<p>Tape Lab ships several datasets. They are not the same kind of thing, and they are labelled
+differently throughout the app.</p>
+
+<h3>2.1 Terminal sessions (NQ / ES)</h3>
+<p>The sessions bundled with the terminal are a <strong>seeded random walk generated in your
+browser</strong>. They are not recorded market history and are not licensed from any data vendor.
+They are labelled demo data everywhere they appear. Importing your own 5-minute OHLCV CSV replaces
+them; a CSV you supply remains subject to the terms of whoever gave it to you.</p>
+<p class="dim">These datasets contain OHLCV bars only — no Time &amp; Sales, no bid/ask, and no
+Level-2 depth. Nothing in Tape Lab claims otherwise.</p>
+
+<h3>2.2 Flow Lab replays</h3>
+<p>Flow Lab is a separate case: it replays <strong>genuine recorded venue data</strong>, alongside one
+synthetic option for practice. Each source is labelled in the app.</p>
+<table>
+  <thead><tr><th>Source</th><th>What it is</th><th>Kind</th></tr></thead>
+  <tbody>
+    <tr>
+      <td class="mono">Synthetic Practice Scenario</td>
+      <td>Generated practice patterns (Spring, Upthrust, Absorption, …) with a known answer.</td>
+      <td class="dim">Synthetic</td>
+    </tr>
+    <tr>
+      <td class="mono">Binance Spot BTCUSDT</td>
+      <td>Public REST snapshot plus WebSocket diff-depth and trade streams, recorded from Binance's
+          public endpoints.</td>
+      <td class="dim">Recorded</td>
+    </tr>
+    <tr>
+      <td class="mono">Binance Historical aggTrades</td>
+      <td>Trade prints only, from Binance's public historical data archive. No Level-2 depth.</td>
+      <td class="dim">Recorded</td>
+    </tr>
+  </tbody>
+</table>
+<p>These recordings are bundled with the application so the order-flow experience works without a
+data subscription. Being bundled, they are downloaded to your browser as part of the page itself —
+so they arrive on your machine whether or not you open Flow Lab. They are included for
+<strong>individual educational use</strong>, and they are not licensed to you for redistribution,
+for resale, for rebuilding a historical database, or for any commercial market-data purpose.
+Binance's own terms govern that data and take precedence over anything stated here.</p>
+<p class="dim">A CME Globex capture recorded through a Databento subscription is <strong>not</strong>
+included in the application. It exists only as a small test fixture in the repository's source, so
+that the vendor adapter can be verified locally. It is never served to a visitor and forms no part
+of what you download by using this site.</p>
+<p class="dim">If you are a rights holder and want a recording removed, open an issue on the
+repository and it will be removed.</p>
+
+<h2>3. Privacy</h2>
+<p><strong>There is no server, no account, and no analytics.</strong> Tape Lab is a static site.
+It has no backend, no login, no cookies, and no tracking scripts, advertising pixels or
+third-party analytics of any kind.</p>
+<p>Everything you create stays in your browser:</p>
+<ul>
+  <li><strong>IndexedDB</strong> — imported CSV datasets and their session indexes.</li>
+  <li><strong>localStorage</strong> — your settings (contract, timezone, indicator periods and
+      colours, opening range, starting balance and risk limits); the <strong>trade journal</strong>
+      for the session you were on, meaning every simulated trade and the notes you wrote on it,
+      restored when you load that session again; and one flag recording that you dismissed the
+      first-run note.</li>
+</ul>
+<p>None of it is transmitted anywhere. Clearing site data in your browser erases all of it, and
+there is no copy on our side to restore — so export anything you want to keep.</p>
+<p>What a reload does <em>not</em> bring back: the replay position, your working orders, and the
+rule violations and blind-mode predictions that also feed the replay score. The performance
+figures are recomputed from the restored trades. Starting a session over clears that session's
+journal, as it always has.</p>
+<p class="dim">Two exceptions worth stating plainly. The page loads web fonts from Google Fonts,
+which means Google sees the request your browser makes for them. And the static host serving this
+site (Vercel) keeps ordinary web-server request logs, as every web host does. Neither is under this
+project's control, and neither is used by this project to identify anyone.</p>
+
+<h2>4. Terms of use</h2>
+<p>You may use Tape Lab for your own education. You get it as-is, with no warranty of any kind and
+no guarantee that it is correct, complete, uninterrupted or fit for any purpose.</p>
+<p>To the fullest extent permitted by law, the author accepts no liability for any loss — including
+trading losses — arising from your use of this software or from reliance on anything it displays.</p>
+<p>This is a personal educational project, not a regulated financial service. It is not registered
+with, authorised by, or supervised by any financial regulator anywhere.</p>
+
+<h2>5. Licence</h2>
+<p>Copyright &copy; 2026 Pavan Arya. All rights reserved. The source code in this repository is
+published publicly for transparency and reference. It is not released under an open-source licence,
+and no right to copy, modify, redistribute or reuse it is granted by its public availability. See
+the <span class="mono">LICENSE</span> file in the repository root.</p>
+<p>The application bundle contains third-party code under its own licences — MIT and Apache-2.0 —
+and requests three typefaces under the SIL Open Font License. Those notices are reproduced in the
+<span class="mono">THIRD-PARTY-NOTICES.md</span> file in the repository root.</p>
+
+<h2>6. Contact</h2>
+<p>Questions, corrections and removal requests: open an issue on the GitHub repository.</p>
+
+<footer>
+  <a href="/">Tape Lab</a> · <a href="/academy.html">Tape Reading Academy</a>
+</footer>
+
+</main>
+</body>
+</html>

@@ -11,8 +11,20 @@ export function watchErrors(page: Page): string[] {
   return errors;
 }
 
-/** Load the app and wait past the loading screen. */
+/**
+ * Load the app and wait past the loading screen. The first-run explainer is
+ * suppressed: it is fixed over the centre of the screen and would intercept
+ * clicks in specs that are not about it. `onboarding.e2e.ts` covers it with a
+ * fresh profile.
+ */
 export async function openApp(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("tl_first_run_seen", "1");
+    } catch {
+      // Storage unavailable; the note will show and may intercept a click.
+    }
+  });
   await page.goto("/");
   await expect(page.locator(".navbtn").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "MARKET BUY", exact: true })).toBeVisible();

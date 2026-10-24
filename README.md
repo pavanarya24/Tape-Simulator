@@ -5,7 +5,7 @@ This repository now contains two things:
 1. **Tape Lab** — the app at `/` — an educational OHLC futures market-replay and trading
    simulator for NQ and ES (Vite + React + TypeScript).
 2. **Tape Reading Academy** — the original single-file course, preserved unchanged at
-   `/academy.html` (see `HANDOFF.md`).
+   `/academy.html` (see `docs/COURSE_HANDOFF.md`).
 
 > **SIMULATED TRADING — HISTORICAL REPLAY.** Tape Lab is a training tool. Fills are
 > simulated with a documented candle-based model; nothing here is a broker fill, and the
@@ -14,9 +14,26 @@ This repository now contains two things:
 > **SYNTHETIC TRAINING DATA — FLOW LAB.** The Flow Lab order-flow experience runs on a
 > deterministic synthetic event feed (seeded trades + Level-2 snapshots + book resets),
 > labelled *Synthetic Training Data* everywhere it appears. It is never derived from OHLC
-> candles and is never presented as real market data; a real vendor adapter (Databento,
-> Rithmic, …) can later implement the same `MarketDataFeed` interface with no engine or UI
-> changes.
+> candles and is never presented as real market data.
+>
+> **Correction (2026-10).** That is no longer the whole picture. Flow Lab now ships **four**
+> selectable sources: the synthetic feed described here, plus three genuine recorded venue
+> captures — Binance Spot BTCUSDT, Binance Vision historical aggTrades, and a Databento CME
+> Globex NQ MBP-1 capture. Each is labelled in the app and listed with its basis in
+> `public/legal.html`. Separately, the terminal's NQ/ES sessions are a seeded random walk
+> generated in your browser, not recorded history. The bundled recordings are included for
+> individual educational use only and are not licensed for redistribution. A real vendor
+> adapter (Rithmic, ...) can implement the same `MarketDataFeed` interface with no engine or
+> UI changes.
+>
+> **Correction (2026-10-24).** The Databento CME NQ capture has been removed from the app. A
+> `?raw` import inlines the bytes into the shipped bundle, and that bundle is served to every
+> visitor, so bundling it redistributed licensed CME data to the public. Flow Lab now offers
+> **three** sources — the synthetic feed and two Binance captures. The Databento adapter
+> (`src/flow/ingest/databento.ts`) and the on-disk fixture (`tests/fixtures/databento_cme_nq.jsonl`)
+> remain for local verification; nothing served reaches them. The fixture is still a tracked file,
+> so it is still published by this repository — removing it from the repo entirely would mean
+> rewriting git history.
 
 ## Running Tape Lab
 
@@ -60,8 +77,19 @@ bun scripts/verify.ts   # core data / replay / execution checks
 
 Real files are optional: Tape Lab seeds a clearly-labelled **synthetic demo dataset** so the
 terminal works immediately. Import genuine 5-minute NQ/ES CSVs on the **Data** page — they
-are parsed in the browser and stored in IndexedDB. Add `videos/` next to `academy.html` for
-the course video slots.
+are parsed in the browser and stored in IndexedDB. The course lives at `/academy.html`.
+
+## Licence
+
+**All rights reserved.** This repository is public so the work can be read and learned from;
+public availability is not a licence. No right to copy, modify, redistribute or reuse is
+granted. See `LICENSE` for the full terms, including the restrictions on the bundled market
+data recordings. A permissive licence can be granted later; this notice can be relaxed but
+never retroactively tightened.
+
+Bundled third-party code, its licences and the font attributions: `THIRD-PARTY-NOTICES.md`.
+
+Risk, data-provenance, privacy and terms of use: `public/legal.html`, served at `/legal.html`.
 
 ## Deployment
 

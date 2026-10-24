@@ -56,6 +56,7 @@ import {
   saveSettings,
   type Settings,
 } from "./settings";
+import { loadJournal, saveJournal, type StoredJournal } from "./journal-store";
 import type { DOMSnapshot, Level } from "../flow/dom";
 import type { OrderFlowSnapshot } from "../flow/orderFlow";
 import {
@@ -110,7 +111,6 @@ import {
   type FlowDataSourceId,
   getDataSourceMeta,
   loadBinanceGenuineSpotFeed,
-  loadDatabentoGenuineNqFeed,
   loadBinanceHistoricalTradesFeed,
 } from "../flow/ingest";
 
@@ -319,6 +319,28 @@ function tradeKey(t: ClosedTrade): string {
   return `${t.instrument}|${t.sessionId}|${t.entryTime}|${t.entryIndex}|${t.direction}|${t.entryPrice}`;
 }
 
+/**
+ * Restored trades first, then the live session's, deduplicated by `tradeKey`. A
+ * trade known to both storage and the simulator appears once, and the live record
+ * wins because it is the one the simulator is still updating. Notes are applied
+ * last, so an edit made before a rebuild is never lost to a stale copy.
+ */
+function mergeJournal(
+  restored: ClosedTrade[],
+  live: ClosedTrade[],
+  notes: Map<string, JournalNotes>,
+): ClosedTrade[] {
+  const byKey = new Map<string, ClosedTrade>();
+  for (const t of restored) byKey.set(tradeKey(t), t);
+  for (const t of live) byKey.set(tradeKey(t), t);
+  const merged = [...byKey.values()];
+  for (const t of merged) {
+    const saved = notes.get(tradeKey(t));
+    if (saved) t.notes = { ...saved };
+  }
+  return merged.sort((a, b) => a.entryTime - b.entryTime);
+}
+
 export class TapeLabController {
   readonly repo = new DataRepository();
   settings: Settings = loadSettings();
@@ -402,7 +424,11 @@ export class TapeLabController {
   }
 
   private actions: ActionEntry[] = [];
-  private notesByKey = new Map<string, JournalNotes>();
+  /** Trades and notes restored from the previous visit to this session. */
+  private journal: StoredJournal = loadJournal();
+  /** Cheap change-detector, so playback does not rewrite storage on every bar. */
+  private journalSignature = "";
+  private notesByKey = new Map<string, JournalNotes>(Object.entries(this.journal.notes));
   private listeners = new Set<() => void>();
   private rafHandle: number | null = null;
   private cache: AppState | null = null;
@@ -466,7 +492,13 @@ export class TapeLabController {
 
   getState(): AppState {
     if (this.cache && this.cacheVersion === this.version) return this.cache;
-    const trades = this.sim?.closedTrades ?? [];
+    // Trades restored from storage belong to one session, and the app only ever
+    // shows one session's trades, so they are merged in only while that session is
+    // the one loaded. Otherwise the journal would mix two sessions together.
+    const sessionId = this.session?.meta.id ?? null;
+    const restored =
+      sessionId !== null && this.journal.sessionId === sessionId ? this.journal.trades : [];
+    const trades = mergeJournal(restored, this.sim?.closedTrades ?? [], this.notesByKey);
     const stats = computePerformance(trades);
     this.cache = {
       ready: this.ready,
@@ -627,6 +659,9 @@ export class TapeLabController {
     } else if (ev.type === "seek" && ev.index !== undefined) {
       this.rebuildTo(ev.index);
     }
+    // A trade can close on the bar just replayed, and the journal is the one piece
+    // of state that does not survive a rebuild. The write is change-guarded.
+    this.persistJournal();
     this.scheduleNotify();
   }
 
@@ -657,6 +692,7 @@ export class TapeLabController {
     }
     this.sim = sim;
     this.lastIndex = index;
+    this.persistJournal();
   }
 
   play(): void {
@@ -681,6 +717,9 @@ export class TapeLabController {
     // cleared.
     this.actions = [];
     this.engine.reset();
+    // The stored journal is cleared with it. Scrubbing back does not do this —
+    // the journal is a record of the run, and only starting over discards it.
+    this.clearStoredJournal();
     this.rebuildTo(0);
     this.notify();
   }
@@ -762,6 +801,44 @@ export class TapeLabController {
 
   private persist(): void {
     saveSettings(this.settings);
+  }
+
+  /**
+   * Write the journal back for the session that is currently loaded. The restored
+   * trades are merged rather than replaced, so a note edited on a trade the
+   * simulator no longer holds is still saved. Skipped while the simulator has
+   * produced nothing new, because playback calls this on every bar.
+   */
+  private persistJournal(): void {
+    const sessionId = this.session?.meta.id ?? null;
+    if (sessionId === null) return;
+    const live = this.sim?.closedTrades ?? [];
+    const signature = `${sessionId}|${live.length}|${live[live.length - 1]?.id ?? ""}`;
+    if (signature === this.journalSignature) return;
+    this.journalSignature = signature;
+    this.writeJournal(sessionId, live);
+  }
+
+  /** Unconditional write, for changes the signature above cannot see (notes). */
+  private writeJournal(sessionId: string, live: ClosedTrade[]): void {
+    const restored = this.journal.sessionId === sessionId ? this.journal.trades : [];
+    const notes: Record<string, JournalNotes> = {};
+    for (const [k, v] of this.notesByKey) notes[k] = v;
+    this.journal = { sessionId, trades: mergeJournal(restored, live, this.notesByKey), notes };
+    saveJournal(this.journal);
+  }
+
+  /**
+   * Drop the stored journal for the loaded session. The notes map is deliberately
+   * kept: a note is something the reader wrote, and only the trade list is being
+   * started over.
+   */
+  private clearStoredJournal(): void {
+    const sessionId = this.session?.meta.id;
+    if (sessionId === undefined) return;
+    this.journal = { sessionId, trades: [], notes: this.journal.notes };
+    saveJournal(this.journal);
+    this.journalSignature = "";
   }
 
   updateSettings(partial: Partial<Settings>): void {
@@ -1166,9 +1243,6 @@ export class TapeLabController {
         case "binance-genuine-spot":
           feed = loadBinanceGenuineSpotFeed();
           break;
-        case "databento-genuine-nq":
-          feed = loadDatabentoGenuineNqFeed();
-          break;
         case "binance-historical-trades":
           feed = loadBinanceHistoricalTradesFeed();
           break;
@@ -1559,10 +1633,18 @@ export class TapeLabController {
   /* ------------------------------ journal ------------------------------ */
 
   updateTradeNotes(tradeId: string, notes: Partial<JournalNotes>): void {
-    const trade = this.sim?.closedTrades.find((t) => t.id === tradeId);
+    const sessionId = this.session?.meta.id ?? null;
+    // After a reload the simulator holds no trades, so a restored trade is found in
+    // the journal instead — otherwise its notes would not be editable at all.
+    const trade =
+      this.sim?.closedTrades.find((t) => t.id === tradeId) ??
+      (sessionId !== null && this.journal.sessionId === sessionId
+        ? this.journal.trades.find((t) => t.id === tradeId)
+        : undefined);
     if (!trade) return;
     trade.notes = { ...trade.notes, ...notes };
     this.notesByKey.set(tradeKey(trade), { ...trade.notes });
+    if (sessionId !== null) this.writeJournal(sessionId, this.sim?.closedTrades ?? []);
     this.notify();
   }
 
@@ -1581,6 +1663,8 @@ export class TapeLabController {
     this.engine.subscribe((ev) => this.onReplayEvent(ev));
     this.sim = new ExecutionSimulator(this.execConfig(), this.execCtx());
     this.sim.onBar(barAt(this.session.bars, 0), 0);
+    // A reset starts a clean account, which has always cleared the journal.
+    this.clearStoredJournal();
     this.notify();
   }
 

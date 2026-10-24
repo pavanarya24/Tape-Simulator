@@ -4,7 +4,6 @@ import {
   FLOW_DATA_SOURCES,
   getDataSourceMeta,
   loadBinanceGenuineSpotFeed,
-  loadDatabentoGenuineNqFeed,
   loadBinanceHistoricalTradesFeed,
 } from "../src/flow/ingest/fixtures";
 import { BinanceAdapter } from "../src/flow/ingest/binance";
@@ -45,25 +44,22 @@ describe("Phase 10-F — Genuine Feed Loader & Provenance Architecture", () => {
     expect(advanced.orderFlow).not.toBeNull();
   });
 
-  test("3. Genuine Databento CME NQ capture loads through production controller and adapter", () => {
+  test("3. The licensed Databento CME capture is not offered and cannot be loaded", () => {
+    // A `?raw` import inlines the bytes into the shipped bundle, and the bundle is
+    // served to every visitor, so bundling this capture would redistribute licensed
+    // CME data to the public. The adapter and the on-disk fixture stay for local
+    // use, but no served path may reach them. If this test ever fails because the
+    // source was re-added, the legal page and README must change with it.
+    expect(FLOW_DATA_SOURCES.map((s) => s.id)).not.toContain("databento-genuine-nq");
+    expect(() => getDataSourceMeta("databento-genuine-nq" as never)).toThrow();
+
     const c = new TapeLabController();
-    c.setFlowDataSource("databento-genuine-nq");
+    c.setFlowDataSource("synthetic");
+    c.setFlowDataSource("databento-genuine-nq" as never);
 
-    const state = c.getState().flow;
-    expect(state.isRealData).toBe(true);
-    expect(state.dataSourceId).toBe("databento-genuine-nq");
-    expect(state.profile.id).toBe("CME:NQ");
-    expect(state.profile.units.quoteCurrency).toBe("USD");
-    expect(state.isTradeOnly).toBe(false);
-    expect(state.source).toContain("Databento");
-    expect(state.totalEvents).toBe(26);
-    expect(state.eventIndex).toBe(0);
-    expect(state.atStart).toBe(true);
-    expect(state.bookChanges).toEqual([]);
-
-    c.stepFlow(15);
-    const advanced = c.getState().flow;
-    expect(advanced.eventIndex).toBe(15);
+    // The controller rejects it and leaves the previous session intact.
+    expect(c.getState().flow.dataSourceId).toBe("synthetic");
+    expect(c.getState().message).toContain("Failed to load data source");
   });
 
   test("4. Historical Binance aggTrades slice explicitly declares trade-only and no L2 depth", () => {
@@ -85,11 +81,6 @@ describe("Phase 10-F — Genuine Feed Loader & Provenance Architecture", () => {
     expect(binanceFeed.isRealData).toBe(true);
     expect(binanceFeed.capabilities?.hasMBO).toBe(false);
     expect(binanceFeed.capabilities?.hasMatchIds).toBe(false);
-
-    const databentoFeed = loadDatabentoGenuineNqFeed();
-    expect(databentoFeed.isRealData).toBe(true);
-    expect(databentoFeed.capabilities?.hasOrderCounts).toBe(true);
-    expect(databentoFeed.capabilities?.hasNanosecondTimestamps).toBe(true);
 
     const histFeed = loadBinanceHistoricalTradesFeed();
     expect(histFeed.isRealData).toBe(true);
@@ -179,12 +170,11 @@ describe("Phase 10-F — Genuine Feed Loader & Provenance Architecture", () => {
     expect(c.getState().message).toContain("Failed to load data source");
   });
 
-  test("9. FLOW_DATA_SOURCES metadata list contains all 4 verified sources with honest labels", () => {
-    expect(FLOW_DATA_SOURCES.length).toBe(4);
+  test("9. FLOW_DATA_SOURCES metadata list contains all 3 offered sources with honest labels", () => {
+    expect(FLOW_DATA_SOURCES.length).toBe(3);
     const ids = FLOW_DATA_SOURCES.map((s) => s.id);
     expect(ids).toContain("synthetic");
     expect(ids).toContain("binance-genuine-spot");
-    expect(ids).toContain("databento-genuine-nq");
     expect(ids).toContain("binance-historical-trades");
 
     for (const ds of FLOW_DATA_SOURCES) {

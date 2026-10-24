@@ -71,18 +71,16 @@ describe("Phase 10-J — replay quality certification", () => {
   });
 
   test("keeps genuine-capture certification bounded to recorded fixture evidence", async () => {
-    const { loadBinanceGenuineSpotFeed, loadDatabentoGenuineNqFeed, loadBinanceHistoricalTradesFeed } = await import("../src/flow/ingest/fixtures");
+    const { loadBinanceGenuineSpotFeed, loadBinanceHistoricalTradesFeed } = await import("../src/flow/ingest/fixtures");
     const spot = loadBinanceGenuineSpotFeed();
-    const nq = loadDatabentoGenuineNqFeed();
     const trades = loadBinanceHistoricalTradesFeed();
 
-    for (const feed of [spot, nq, trades]) {
+    for (const feed of [spot, trades]) {
       expect(feed.validationReport).toBeDefined();
       expect(feed.validationReport!.normalizedEventCount).toBe(feed.totalEvents());
       expect(feed.validationReport!.recordCount).toBeGreaterThan(0);
     }
     expect(spot.capabilities.hasDepth).toBe(true);
-    expect(nq.capabilities.hasDepth).toBe(true);
     expect(trades.capabilities.hasDepth).toBe(false);
     expect(trades.capabilities.hasQuotes).toBe(false);
   });

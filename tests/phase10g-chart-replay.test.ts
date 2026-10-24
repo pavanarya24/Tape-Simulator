@@ -16,7 +16,6 @@ import { describe, expect, it } from "bun:test";
 import {
   BinanceAdapter,
   loadBinanceGenuineSpotFeed,
-  loadDatabentoGenuineNqFeed,
   loadBinanceHistoricalTradesFeed,
 } from "../src/flow/ingest";
 import {
@@ -125,26 +124,6 @@ describe("Phase 10-G: Real-Data Candle Aggregation & Integrity", () => {
     }
   });
 
-  it("renders genuine trade prints into valid candles on Databento CME NQ", () => {
-    const controller = new TapeLabController();
-    controller.setFlowDataSource("databento-genuine-nq");
-
-    // Databento genuine NQ has trades starting early in the feed
-    const seekOk = controller.seekFlow(50);
-    expect(seekOk).toBe(true);
-
-    const state = (controller as any).flowState();
-    expect(state.priceSeries.length).toBeGreaterThan(0);
-
-    const candles = adaptPriceSeriesToCandles(state.priceSeries);
-    expect(candles.length).toBeGreaterThan(0);
-    for (const c of candles) {
-      expect(c.open).toBeGreaterThan(15000);
-      expect(c.high).toBeGreaterThanOrEqual(c.low);
-      expect(Number.isFinite(c.time as number)).toBe(true);
-    }
-  });
-
   it("historical aggTrades archive builds candles while explicitly reporting trade-only feed", () => {
     const controller = new TapeLabController();
     controller.setFlowDataSource("binance-historical-trades");
@@ -201,7 +180,7 @@ describe("Phase 10-G: Replay Navigation, Seeking, & Blind-Mode Invariants", () =
 
   it("replaying after reset or seek produces deterministic state", () => {
     const controller = new TapeLabController();
-    controller.setFlowDataSource("databento-genuine-nq");
+    controller.setFlowDataSource("binance-genuine-spot");
 
     controller.seekFlow(100);
     const stateA = (controller as any).flowState();

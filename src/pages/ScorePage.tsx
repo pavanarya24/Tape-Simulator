@@ -72,8 +72,13 @@ export function ScorePage({ state }: { state: AppState }) {
         <div className="card">
           <div className="card-head">
             <h3>Trading results</h3>
+            <span className="right badge warn">SIMULATED</span>
           </div>
           <div className="card-body">
+            <p className="dim" style={{ fontSize: 10.5, margin: "0 0 8px" }}>
+              Hypothetical fills against replayed bars. No order was ever sent to a broker, and these
+              numbers are not a track record.
+            </p>
             <div className="kv">
               <span className="k">Closed trades</span>
               <span className="v">{stats.trades}</span>

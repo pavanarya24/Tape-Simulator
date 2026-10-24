@@ -48,8 +48,9 @@ export function RightColumn({ state }: { state: AppState }) {
         </div>
         <div className="panel-body">
           <div className="field">
-            <label>Size</label>
+            <label htmlFor="ot-size">Size</label>
             <input
+              id="ot-size"
               type="number"
               min={1}
               step={1}
@@ -58,11 +59,17 @@ export function RightColumn({ state }: { state: AppState }) {
             />
           </div>
           <div className="field">
-            <label>Price</label>
+            <label htmlFor="ot-price">Price</label>
             <div style={{ display: "flex", gap: 6 }}>
-              <input type="text" value={price} onChange={(e) => setPrice(e.target.value)} />
+              <input
+                id="ot-price"
+                type="text"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+              />
               <button
                 className="btn sm"
+                aria-label="Fill price with the last traded price"
                 onClick={() => Number.isFinite(lastPrice) && setPrice(lastPrice.toFixed(2))}
               >
                 LAST
@@ -70,12 +77,24 @@ export function RightColumn({ state }: { state: AppState }) {
             </div>
           </div>
           <div className="field">
-            <label>Stop loss</label>
-            <input type="text" placeholder="optional" value={stop} onChange={(e) => setStop(e.target.value)} />
+            <label htmlFor="ot-stop">Stop loss</label>
+            <input
+              id="ot-stop"
+              type="text"
+              placeholder="optional"
+              value={stop}
+              onChange={(e) => setStop(e.target.value)}
+            />
           </div>
           <div className="field">
-            <label>Take profit</label>
-            <input type="text" placeholder="optional" value={target} onChange={(e) => setTarget(e.target.value)} />
+            <label htmlFor="ot-target">Take profit</label>
+            <input
+              id="ot-target"
+              type="text"
+              placeholder="optional"
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+            />
           </div>
 
           <div className="grid2" style={{ marginBottom: 6 }}>
