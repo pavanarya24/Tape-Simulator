@@ -36,13 +36,13 @@ No signup. No broker. No live feed. Everything runs in your browser.
 
 ## Screenshots
 
-![Tape Lab terminal — replayed candles, a simulated open position, and the order ticket](docs/screenshots/terminal.png)
+![Tape Lab terminal — replayed candles, a simulated open position, and the order ticket](public/shots/terminal.png)
 
 | Flow Lab — order flow & DOM | Score — graded replay |
 |---|---|
-| ![Flow Lab](docs/screenshots/flow-lab.png) | ![Score](docs/screenshots/score.png) |
+| ![Flow Lab](public/shots/flow-lab.png) | ![Score](public/shots/score.png) |
 | **Journal** — tagged trade notes | **Academy** — the original course |
-| ![Journal](docs/screenshots/journal.png) | ![Academy](docs/screenshots/academy.png) |
+| ![Journal](public/shots/journal.png) | ![Academy](public/shots/academy.png) |
 
 ---
 
