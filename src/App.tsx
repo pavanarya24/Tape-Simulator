@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Analytics } from "@vercel/analytics/react";
 import { controller, useApp, type AppState } from "./state/useApp";
 import { TopBar } from "./components/TopBar";
 import { LeftColumn } from "./components/LeftColumn";
@@ -195,6 +196,7 @@ export default function App() {
           {state.message} <span className="dim">(click to dismiss)</span>
         </div>
       )}
+      <Analytics />
     </div>
   );
 }
